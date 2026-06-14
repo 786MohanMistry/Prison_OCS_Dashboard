@@ -167,6 +167,22 @@ function sheetToArray(ws) {
     return rows;
 }
 
+function getCol(obj, names) {
+    if (typeof names === 'string') names = [names];
+    for (const name of names) {
+        if (obj[name] !== undefined) return obj[name];
+    }
+    const lower = names.map(n => n.toLowerCase());
+    const keys = Object.keys(obj);
+    for (const k of keys) {
+        const kl = k.toLowerCase();
+        const idx = lower.indexOf(kl);
+        if (idx !== -1) return obj[names[idx]];
+    }
+    console.warn('None of [' + names.join('], [') + '] found in row');
+    return undefined;
+}
+
 function parseFacilityFile(data) {
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
     const ws = wb.Sheets['Facility Data'] || wb.Sheets[wb.SheetNames[0]];
@@ -188,24 +204,31 @@ function parseProgressFile(data) {
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
     const ws = wb.Sheets['Prison-OCS Progress'] || wb.Sheets[wb.SheetNames[0]];
     const rows = sheetToArray(ws);
+    if (rows.length > 0) {
+        console.log('Progress column headers:', Object.keys(rows[0]).join(', '));
+    }
     appState.raw.progress = rows.map(r => {
-        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
-        const hhxrScreened = toNum(r['Number of inmates screened for TB through Handheld X-ray--.Total']);
-        const tbPresumptive = toNum(r['Number of inmates found TB Symptomatic during the reporting month--.Total']);
-        const testedTB = toNum(r['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']);
+        const c10S = toNum(getCol(r, ['Number of inmates screened for TB through 10S--.Total']));
+        const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray--.Total']));
+        const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
+        const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
+        const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
+        const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
+        const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
         return {
             PrisonOCSCode: code,
             StartDate: xlToDate(r['Start Date']),
             EndDate: xlToDate(r['End Date']),
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
-            TestedHIV: toNum(r['Number of inmates screened for HIV through camps--.Total']) + toNum(r['Number of inmates screened/tested through prison based F-ICTCs--.Total']) + toNum(r['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']),
-            ScreenedTB: toNum(r['Number of inmates screened for TB through 10S--.Total']),
-            TBPresumptive: tbPresumptive,
-            TestedTB: testedTB,
-            HHXRScreened: hhxrScreened,
-            HHXRPresumptive: hhxrScreened > 0 ? tbPresumptive : 0,
-            HHXRTested: hhxrScreened > 0 ? testedTB : 0,
+            TestedHIV: testedCamp + testedFICTC + testedSAICTC,
+            ScreenedTB: c10S + cDD,
+            TBPresumptive: cDH,
+            TestedTB: cDL,
+            HHXRScreened: cDD,
+            HHXRPresumptive: cDD > 0 ? cDH : 0,
+            HHXRTested: cDD > 0 ? cDL : 0,
             TotalCamp: toNum(r['Total Camp']),
             PU: ('' + (r['PU'] || '')).trim()
         };
@@ -217,16 +240,19 @@ function parseHIVFile(data) {
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
     const ws = wb.Sheets['HIV Testing Record'] || wb.Sheets[wb.SheetNames[0]];
     const rows = sheetToArray(ws);
+    if (rows.length > 0) {
+        console.log('HIV column headers:', Object.keys(rows[0]).join(', '));
+    }
     appState.raw.hiv = rows.map(r => {
-        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         return {
             PrisonOCSCode: code,
-            SubmissionDate: xlToDate(r['Submission Date']),
-            HIVPositive: toNum(r['HIV Positive']),
-            OnART: toNum(r['Initiated on ART1']),
-            HIVConfDate: xlToDate(r['Date of HIV confirmation test']),
-            ARTInitDate: xlToDate(r['Date of ART initiation'])
+            SubmissionDate: xlToDate(getCol(r, ['Submission Date'])),
+            HIVPositive: toNum(getCol(r, ['HIV Positive', 'HIV Positive (on date of test)'])),
+            OnART: toNum(getCol(r, ['Initiated on ART1', 'Initiated on ART'])),
+            HIVConfDate: xlToDate(getCol(r, ['Date of HIV confirmation test'])),
+            ARTInitDate: xlToDate(getCol(r, ['Date of ART initiation']))
         };
     }).filter(r => r !== null);
     return appState.raw.hiv;
@@ -236,17 +262,20 @@ function parseTBFile(data) {
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
     const ws = wb.Sheets['TB'] || wb.Sheets[wb.SheetNames[0]];
     const rows = sheetToArray(ws);
+    if (rows.length > 0) {
+        console.log('TB column headers:', Object.keys(rows[0]).join(', '));
+    }
     appState.raw.tb = rows.map(r => {
-        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         return {
             PrisonOCSCode: code,
-            SubmissionDate: xlToDate(r['Submission Date']),
-            Mode: ('' + (r['Mode of TB screening'] || '')).trim(),
-            DiagnosedTB: toNum(r['Diagnosed with TB']),
-            OnATT: toNum(r['On ATT']),
-            TBTestDate: xlToDate(r['Date of tested for TB']),
-            ATTInitDate: xlToDate(r['Date of ATT initiation'])
+            SubmissionDate: xlToDate(getCol(r, ['Submission Date'])),
+            Mode: ('' + getCol(r, ['Mode of TB screening']) || '').trim(),
+            DiagnosedTB: toNum(getCol(r, ['Diagnosed with TB', 'Diagnosed with TB1'])),
+            OnATT: toNum(getCol(r, ['On ATT'])),
+            TBTestDate: xlToDate(getCol(r, ['Date of tested for TB'])),
+            ATTInitDate: xlToDate(getCol(r, ['Date of ART initiation']))
         };
     }).filter(r => r !== null);
     return appState.raw.tb;
