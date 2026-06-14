@@ -83,6 +83,58 @@ document.querySelectorAll('.sidebar-menu-item').forEach(item => {
     });
 });
 
+// --- LocalStorage Persistence (synchronous, reliable) ---
+
+const STORAGE_KEY = 'subhiksha_dashboard_v2';
+
+function saveRawToStorage() {
+    try {
+        const payload = {
+            data: appState.raw,
+            filesLoaded: appState.filesLoaded,
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        return true;
+    } catch (e) {
+        console.warn('localStorage save failed (quota exceeded?):', e);
+        return false;
+    }
+}
+
+function loadRawFromStorage() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const payload = JSON.parse(raw);
+        if (!payload || !payload.data) return null;
+        return payload;
+    } catch (e) {
+        console.warn('localStorage load failed:', e);
+        return null;
+    }
+}
+
+function clearStorage() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+}
+
+// Date fields that need to be converted back from strings after JSON.parse
+const DATE_FIELDS_PROGRESS = ['StartDate', 'EndDate', 'ReportingMonth'];
+const DATE_FIELDS_HIV = ['SubmissionDate', 'HIVConfDate', 'ARTInitDate'];
+const DATE_FIELDS_TB = ['SubmissionDate', 'TBTestDate', 'ATTInitDate'];
+
+function restoreDatesInPlace(arr, fields) {
+    if (!arr) return;
+    for (const item of arr) {
+        for (const f of fields) {
+            if (item[f] && typeof item[f] === 'string') {
+                item[f] = new Date(item[f]);
+            }
+        }
+    }
+}
+
 // --- Excel Parsing (SheetJS) ---
 
 function xlToDate(val) {
@@ -139,18 +191,21 @@ function parseProgressFile(data) {
     appState.raw.progress = rows.map(r => {
         const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
         if (!code) return null;
+        const hhxrScreened = toNum(r['Number of inmates screened for TB through Handheld X-ray--.Total']);
+        const tbPresumptive = toNum(r['Number of inmates found TB Symptomatic during the reporting month--.Total']);
+        const testedTB = toNum(r['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']);
         return {
             PrisonOCSCode: code,
             StartDate: xlToDate(r['Start Date']),
             EndDate: xlToDate(r['End Date']),
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
-            TestedHIV: toNum(r['Total Tested for HIV']),
-            ScreenedTB: toNum(r['Total Screened for TB']),
-            PresumptiveTB: toNum(r['TB Presumptive']),
-            TestedTB: toNum(r['Tested for TB']),
-            HHXRScreened: toNum(r['Screened for TB HHXR']),
-            HHXRPresumptive: toNum(r['TB Presumptive HHXR']),
-            HHXRTested: toNum(r['Tested for TB HHXR']),
+            TestedHIV: toNum(r['Number of inmates screened for HIV through camps--.Total']) + toNum(r['Number of inmates screened/tested through prison based F-ICTCs--.Total']) + toNum(r['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']),
+            ScreenedTB: toNum(r['Number of inmates screened for TB through 10S--.Total']),
+            TBPresumptive: tbPresumptive,
+            TestedTB: testedTB,
+            HHXRScreened: hhxrScreened,
+            HHXRPresumptive: hhxrScreened > 0 ? tbPresumptive : 0,
+            HHXRTested: hhxrScreened > 0 ? testedTB : 0,
             TotalCamp: toNum(r['Total Camp']),
             PU: ('' + (r['PU'] || '')).trim()
         };
@@ -188,7 +243,7 @@ function parseTBFile(data) {
             PrisonOCSCode: code,
             SubmissionDate: xlToDate(r['Submission Date']),
             Mode: ('' + (r['Mode of TB screening'] || '')).trim(),
-            DiagnosedTB: toNum(r['Diagnosed with TB1']),
+            DiagnosedTB: toNum(r['Diagnosed with TB']),
             OnATT: toNum(r['On ATT']),
             TBTestDate: xlToDate(r['Date of tested for TB']),
             ATTInitDate: xlToDate(r['Date of ATT initiation'])
@@ -225,6 +280,7 @@ document.querySelectorAll('.excel-file-input').forEach(input => {
             else if (type === 'tb') count = parseTBFile(data).length;
             appState.filesLoaded[type] = true;
             updateFileBadge(type, count);
+            saveRawToStorage();
         } catch (err) {
             alert('Error reading file: ' + err.message);
             console.error(err);
@@ -769,8 +825,42 @@ document.getElementById('searchTableInput').addEventListener('input', (e) => {
     updateFacilityProgressTab();
 });
 
+// --- Restore from localStorage ---
+
+function restoreSavedFiles() {
+    const payload = loadRawFromStorage();
+    if (payload && payload.data) {
+        appState.raw = payload.data;
+        appState.filesLoaded = payload.filesLoaded || { facility: false, progress: false, hiv: false, tb: false };
+        restoreDatesInPlace(appState.raw.progress, DATE_FIELDS_PROGRESS);
+        restoreDatesInPlace(appState.raw.hiv, DATE_FIELDS_HIV);
+        restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
+
+        const allLoaded = Object.values(appState.filesLoaded).every(v => v);
+        if (allLoaded) {
+            const counts = {
+                facility: appState.raw.facilities.length,
+                progress: appState.raw.progress.length,
+                hiv: appState.raw.hiv.length,
+                tb: appState.raw.tb.length
+            };
+            Object.keys(counts).forEach(k => updateFileBadge(k, counts[k]));
+
+            const label = payload.savedAt
+                ? 'Restored from ' + new Date(payload.savedAt).toLocaleDateString()
+                : 'Restored from browser storage';
+            document.getElementById('lastLoadedLabel').innerText = label;
+
+            renderDashboard();
+            navigateToSection('overviewSection');
+            return;
+        }
+    }
+    navigateToSection('uploadSection');
+}
+
 // --- Init ---
 
 document.getElementById('filterStartDate').value = appState.filters.startDate;
 document.getElementById('filterEndDate').value = appState.filters.endDate;
-navigateToSection('uploadSection');
+restoreSavedFiles();
