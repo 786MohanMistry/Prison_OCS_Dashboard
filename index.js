@@ -1,0 +1,776 @@
+/* index.js - Standalone (Client-Side) Edition */
+
+let appState = {
+    raw: { facilities: [], progress: [], hiv: [], tb: [] },
+    data: null,
+    filters: {
+        state: 'All',
+        facilityType: 'All',
+        prisonType: 'All',
+        pu: 'All',
+        startDate: '2024-04-01',
+        endDate: '2026-06-06',
+        groupBy: 'Month'
+    },
+    facilityTable: {
+        currentPage: 1,
+        pageSize: 15,
+        sortBy: 'PrisonOCSCode',
+        sortOrder: 'asc',
+        searchQuery: ''
+    },
+    filesLoaded: { facility: false, progress: false, hiv: false, tb: false }
+};
+
+Chart.register(ChartDataLabels);
+
+let charts = { prisonPie: null, ocsPie: null, hivTrend: null, tbTrend: null };
+
+const dlConfig = {
+    color: '#e2e8f0',
+    font: { family: 'Outfit', weight: 'bold' },
+    anchor: 'end',
+    align: 'end',
+    offset: 2
+};
+
+const loadingOverlay = document.getElementById('loadingOverlay');
+const loadingText = document.getElementById('loadingText');
+
+function showSpinner(text) {
+    loadingText.innerText = text || "Loading...";
+    loadingOverlay.style.display = 'flex';
+}
+function hideSpinner() {
+    loadingOverlay.style.display = 'none';
+}
+
+function formatNum(val, isPct, precision) {
+    if (precision === undefined) precision = 0;
+    if (val === null || val === undefined || isNaN(val)) return '-';
+    if (isPct) {
+        if (val === 0) return '0%';
+        return val.toFixed(precision) + '%';
+    }
+    if (val === 0) return '-';
+    return typeof val === 'number' ? Math.round(val).toLocaleString() : val;
+}
+
+function navigateToSection(targetId) {
+    const menuItem = document.querySelector(`.sidebar-menu-item[data-target="${targetId}"]`);
+    if (!menuItem) return;
+    document.querySelectorAll('.sidebar-menu-item').forEach(i => i.classList.remove('active'));
+    menuItem.classList.add('active');
+    document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
+    const targetSection = document.getElementById(targetId);
+    if (targetSection) targetSection.classList.add('active');
+    const sectionTitle = menuItem.innerText.trim();
+    document.getElementById('sectionTitle').innerText = sectionTitle;
+    const subtitleEl = document.getElementById('sectionSubtitle');
+    const subs = {
+        overviewSection: "Weekly & Monthly Performance Indicators",
+        reportedSection: "Prison Reporting Frequencies & Diagnostic Summary",
+        progressSection: "Facility-Wise Detailed Diagnostics and ATT Linkages",
+        uploadSection: "Import Excel Progress sheets and Facilities data"
+    };
+    subtitleEl.innerText = subs[targetId] || '';
+}
+
+document.querySelectorAll('.sidebar-menu-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateToSection(item.getAttribute('data-target'));
+    });
+});
+
+// --- Excel Parsing (SheetJS) ---
+
+function xlToDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
+    if (typeof val === 'string') {
+        const d = new Date(val);
+        if (!isNaN(d)) return d;
+        const parts = val.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+        if (parts) return new Date(+parts[3], +parts[1] - 1, +parts[2]);
+    }
+    return null;
+}
+
+function toNum(val) {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        if (val.toLowerCase() === 'yes') return 1;
+        if (val.toLowerCase() === 'no') return 0;
+        const n = parseFloat(val.replace(/[^0-9.-]/g, ''));
+        return isNaN(n) ? 0 : n;
+    }
+    return 0;
+}
+
+function sheetToArray(ws) {
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+    return rows;
+}
+
+function parseFacilityFile(data) {
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const ws = wb.Sheets['Facility Data'] || wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetToArray(ws);
+    appState.raw.facilities = rows.map(r => ({
+        FacilityAppID: ('' + (r['Facility AppID'] || '')).trim(),
+        Name: ('' + (r['Name of Prison/OCS'] || '')).trim(),
+        Type: ('' + (r['Type of Prison/OCS'] || '')).trim(),
+        FacilityType: ('' + (r['Type of Facility'] || '')).trim(),
+        State: ('' + (r['Address--State'] || '')).trim(),
+        Target: toNum(r['Monthly Target']),
+        PrisonOCSCode: ('' + (r['Prison/OCS ID'] || '')).trim(),
+        CreatedByUser: ('' + (r['Created By User'] || '')).trim()
+    })).filter(f => f.PrisonOCSCode !== '');
+    return appState.raw.facilities;
+}
+
+function parseProgressFile(data) {
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const ws = wb.Sheets['Prison-OCS Progress'] || wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetToArray(ws);
+    appState.raw.progress = rows.map(r => {
+        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        if (!code) return null;
+        return {
+            PrisonOCSCode: code,
+            StartDate: xlToDate(r['Start Date']),
+            EndDate: xlToDate(r['End Date']),
+            ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
+            TestedHIV: toNum(r['Total Tested for HIV']),
+            ScreenedTB: toNum(r['Total Screened for TB']),
+            PresumptiveTB: toNum(r['TB Presumptive']),
+            TestedTB: toNum(r['Tested for TB']),
+            HHXRScreened: toNum(r['Screened for TB HHXR']),
+            HHXRPresumptive: toNum(r['TB Presumptive HHXR']),
+            HHXRTested: toNum(r['Tested for TB HHXR']),
+            TotalCamp: toNum(r['Total Camp']),
+            PU: ('' + (r['PU'] || '')).trim()
+        };
+    }).filter(r => r !== null);
+    return appState.raw.progress;
+}
+
+function parseHIVFile(data) {
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const ws = wb.Sheets['HIV Testing Record'] || wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetToArray(ws);
+    appState.raw.hiv = rows.map(r => {
+        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        if (!code) return null;
+        return {
+            PrisonOCSCode: code,
+            SubmissionDate: xlToDate(r['Submission Date']),
+            HIVPositive: toNum(r['HIV Positive']),
+            OnART: toNum(r['Initiated on ART1']),
+            HIVConfDate: xlToDate(r['Date of HIV confirmation test']),
+            ARTInitDate: xlToDate(r['Date of ART initiation'])
+        };
+    }).filter(r => r !== null);
+    return appState.raw.hiv;
+}
+
+function parseTBFile(data) {
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const ws = wb.Sheets['TB'] || wb.Sheets[wb.SheetNames[0]];
+    const rows = sheetToArray(ws);
+    appState.raw.tb = rows.map(r => {
+        const code = ('' + (r['Prison/OCS - ID'] || '')).trim();
+        if (!code) return null;
+        return {
+            PrisonOCSCode: code,
+            SubmissionDate: xlToDate(r['Submission Date']),
+            Mode: ('' + (r['Mode of TB screening'] || '')).trim(),
+            DiagnosedTB: toNum(r['Diagnosed with TB1']),
+            OnATT: toNum(r['On ATT']),
+            TBTestDate: xlToDate(r['Date of tested for TB']),
+            ATTInitDate: xlToDate(r['Date of ATT initiation'])
+        };
+    }).filter(r => r !== null);
+    return appState.raw.tb;
+}
+
+function updateFileBadge(type, rows) {
+    const badgeMap = { facility: 'badge-facility', progress: 'badge-progress', hiv: 'badge-hiv', tb: 'badge-tb' };
+    const rowsMap = { facility: 'label-facility-rows', progress: 'label-progress-rows', hiv: 'label-hiv-rows', tb: 'label-tb-rows' };
+    const badge = document.getElementById(badgeMap[type]);
+    const rowsLabel = document.getElementById(rowsMap[type]);
+    if (badge) {
+        badge.innerText = 'Loaded (' + rows + ' rows)';
+        badge.className = 'badge badge-success';
+    }
+    if (rowsLabel) rowsLabel.innerText = 'Rows: ' + rows.toLocaleString();
+}
+
+document.querySelectorAll('.excel-file-input').forEach(input => {
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const type = input.getAttribute('data-type');
+        showSpinner('Reading ' + file.name + '...');
+        try {
+            const buf = await file.arrayBuffer();
+            const data = new Uint8Array(buf);
+            let count = 0;
+            if (type === 'facility') count = parseFacilityFile(data).length;
+            else if (type === 'progress') count = parseProgressFile(data).length;
+            else if (type === 'hiv') count = parseHIVFile(data).length;
+            else if (type === 'tb') count = parseTBFile(data).length;
+            appState.filesLoaded[type] = true;
+            updateFileBadge(type, count);
+        } catch (err) {
+            alert('Error reading file: ' + err.message);
+            console.error(err);
+        } finally {
+            hideSpinner();
+            input.value = '';
+        }
+    });
+});
+
+// --- Data Aggregation (ported from server.ps1) ---
+
+function processDashboardData() {
+    const f = appState.filters;
+    const raw = appState.raw;
+
+    const startDate = f.startDate ? new Date(f.startDate) : null;
+    const endDate = f.endDate ? new Date(f.endDate) : null;
+
+    const facilities = raw.facilities.filter(fac => {
+        if (f.state !== 'All' && fac.State !== f.state) return false;
+        if (f.facilityType !== 'All' && fac.FacilityType !== f.facilityType) return false;
+        if (f.prisonType !== 'All' && fac.Type !== f.prisonType) return false;
+        return true;
+    });
+
+    const facCodes = new Set(facilities.map(f => f.PrisonOCSCode));
+    const facTargets = {};
+    const facDetails = {};
+    facilities.forEach(f => {
+        facTargets[f.PrisonOCSCode] = f.Target;
+        facDetails[f.PrisonOCSCode] = f;
+    });
+
+    const filteredProgress = raw.progress.filter(p => {
+        if (!facCodes.has(p.PrisonOCSCode)) return false;
+        if (f.pu !== 'All' && p.PU !== f.pu) return false;
+        if (startDate && p.EndDate && p.EndDate < startDate) return false;
+        if (endDate && p.EndDate && p.EndDate > endDate) return false;
+        return true;
+    });
+
+    const reportsCountByCode = {};
+    const reportedHIVByCode = {};
+    const reportedTBScreenedByCode = {};
+    const reportedTBPresByCode = {};
+    const reportedTBTestedByCode = {};
+    const reportedHHXRScreenedByCode = {};
+    const reportedHHXRPresByCode = {};
+    const reportedHHXRTestedByCode = {};
+    const reportedCampByCode = {};
+
+    filteredProgress.forEach(p => {
+        const code = p.PrisonOCSCode;
+        reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
+        reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
+        reportedTBScreenedByCode[code] = (reportedTBScreenedByCode[code] || 0) + p.ScreenedTB;
+        reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.PresumptiveTB;
+        reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
+        reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
+        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + p.HHXRPresumptive;
+        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + p.HHXRTested;
+        reportedCampByCode[code] = (reportedCampByCode[code] || 0) + p.TotalCamp;
+    });
+
+    const reportedHIVPosByCode = {};
+    raw.hiv.forEach(h => {
+        if (!facCodes.has(h.PrisonOCSCode)) return;
+        if (startDate && h.HIVConfDate && h.HIVConfDate < startDate) return;
+        if (endDate && h.HIVConfDate && h.HIVConfDate > endDate) return;
+        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
+    });
+
+    const reportedOnARTByCode = {};
+    raw.hiv.forEach(h => {
+        if (!facCodes.has(h.PrisonOCSCode)) return;
+        if (startDate && h.ARTInitDate && h.ARTInitDate < startDate) return;
+        if (endDate && h.ARTInitDate && h.ARTInitDate > endDate) return;
+        reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+    });
+
+    const reportedTBDiagByCode = {};
+    const reportedOnATTByCode = {};
+    raw.tb.forEach(t => {
+        if (!facCodes.has(t.PrisonOCSCode)) return;
+        if (startDate && t.TBTestDate && t.TBTestDate < startDate) return;
+        if (endDate && t.TBTestDate && t.TBTestDate > endDate) return;
+        reportedTBDiagByCode[t.PrisonOCSCode] = (reportedTBDiagByCode[t.PrisonOCSCode] || 0) + t.DiagnosedTB;
+        reportedOnATTByCode[t.PrisonOCSCode] = (reportedOnATTByCode[t.PrisonOCSCode] || 0) + t.OnATT;
+    });
+
+    const reportedHHXRDiagByCode = {};
+    const reportedHHXRAttByCode = {};
+    raw.tb.forEach(t => {
+        if (!facCodes.has(t.PrisonOCSCode)) return;
+        if (t.Mode !== 'Handheld X-Ray') return;
+        if (startDate && t.TBTestDate && t.TBTestDate < startDate) return;
+        if (endDate && t.TBTestDate && t.TBTestDate > endDate) return;
+        reportedHHXRDiagByCode[t.PrisonOCSCode] = (reportedHHXRDiagByCode[t.PrisonOCSCode] || 0) + t.DiagnosedTB;
+        reportedHHXRAttByCode[t.PrisonOCSCode] = (reportedHHXRAttByCode[t.PrisonOCSCode] || 0) + t.OnATT;
+    });
+
+    // --- Module 1: Overview ---
+
+    const prisonPie = {};
+    const ocsPie = {};
+    facilities.forEach(f => {
+        if (f.FacilityType === 'Prison') prisonPie[f.Type] = (prisonPie[f.Type] || 0) + 1;
+        else if (f.FacilityType === 'OCS') ocsPie[f.Type] = (ocsPie[f.Type] || 0) + 1;
+    });
+
+    const trendHIV = {};
+    const trendTB = {};
+    filteredProgress.forEach(p => {
+        let key = 'Unknown';
+        if (f.groupBy === 'PU') {
+            key = p.PU || 'Unknown';
+        } else if (f.groupBy === 'Month' && p.ReportingMonth) {
+            key = p.ReportingMonth.getFullYear() + '-' + String(p.ReportingMonth.getMonth() + 1).padStart(2, '0');
+        } else if (f.groupBy === 'Quarter' && p.ReportingMonth) {
+            const q = Math.ceil((p.ReportingMonth.getMonth() + 1) / 3);
+            key = p.ReportingMonth.getFullYear() + '-Q' + q;
+        }
+        trendHIV[key] = (trendHIV[key] || 0) + p.TestedHIV;
+        trendTB[key] = (trendTB[key] || 0) + p.ScreenedTB;
+    });
+
+    const sortedKeys = Object.keys(trendHIV).sort();
+    const trendsData = {
+        labels: sortedKeys,
+        HIVValues: sortedKeys.map(k => trendHIV[k]),
+        TBValues: sortedKeys.map(k => trendTB[k])
+    };
+
+    const prisonTypes = ["Central Jail", "District Jail", "Sub Jail", "Special Jail", "Open Jail", "Women Jail", "Borstal Jail", "Other Jail", "Juvenile Home", "Observation Home", "Special Home", "Place of Safety", "Others"];
+
+    const module2Rows = [];
+    prisonTypes.forEach(type => {
+        const facsOfType = facilities.filter(f => f.Type === type);
+        if (facsOfType.length === 0 && !type.includes('Jail')) return;
+
+        let noOfPrison = facsOfType.length;
+        let monthlyTarget = 0;
+        let totalTestedHIV = 0, totalScreenedTB = 0, tbPresumptive = 0, tbTested = 0;
+        let reported1 = 0, reported2 = 0, reported3 = 0, reported4 = 0, reported5 = 0, reported0Data = 0;
+        const reportedCodes = {};
+
+        facsOfType.forEach(f => {
+            monthlyTarget += f.Target;
+            const code = f.PrisonOCSCode;
+            if (reportsCountByCode[code]) {
+                reportedCodes[code] = true;
+                const count = reportsCountByCode[code];
+                if (count === 1) reported1++;
+                else if (count === 2) reported2++;
+                else if (count === 3) reported3++;
+                else if (count === 4) reported4++;
+                else if (count >= 5) reported5++;
+                const hivTested = reportedHIVByCode[code] || 0;
+                totalTestedHIV += hivTested;
+                if (hivTested === 0) reported0Data++;
+                totalScreenedTB += reportedTBScreenedByCode[code] || 0;
+                tbPresumptive += reportedTBPresByCode[code] || 0;
+                tbTested += reportedTBTestedByCode[code] || 0;
+            }
+        });
+
+        const noOfPrisonReported = Object.keys(reportedCodes).length;
+        const noOfPrisonNotReported = noOfPrison - noOfPrisonReported;
+
+        let hivPositive = 0, onArt = 0;
+        Object.keys(reportedCodes).forEach(code => {
+            hivPositive += reportedHIVPosByCode[code] || 0;
+            onArt += reportedOnARTByCode[code] || 0;
+        });
+
+        let diagTB = 0, onAtt = 0;
+        Object.keys(reportedCodes).forEach(code => {
+            diagTB += reportedTBDiagByCode[code] || 0;
+            onAtt += reportedOnATTByCode[code] || 0;
+        });
+
+        module2Rows.push({
+            Type: type,
+            NoOfPrison: noOfPrison,
+            NoOfPrisonReported: noOfPrisonReported,
+            NoOfPrisonNotReported: noOfPrisonNotReported,
+            NoOfPrisonReported0: reported0Data,
+            Reported1: reported1, Reported2: reported2, Reported3: reported3,
+            Reported4: reported4, Reported5: reported5,
+            MonthlyTarget: monthlyTarget,
+            TestedHIV: totalTestedHIV,
+            PctAchieved: monthlyTarget > 0 ? (totalTestedHIV / monthlyTarget) * 100 : 0,
+            HIVPositive: hivPositive,
+            OnART: onArt,
+            PctOnART: hivPositive > 0 ? (onArt / hivPositive) * 100 : 0,
+            ScreenedTB: totalScreenedTB,
+            PctTBScreened: monthlyTarget > 0 ? (totalScreenedTB / monthlyTarget) * 100 : 0,
+            TBPresumptive: tbPresumptive,
+            PctPresumptive: totalScreenedTB > 0 ? (tbPresumptive / totalScreenedTB) * 100 : 0,
+            TestedTB: tbTested,
+            PctTested: tbPresumptive > 0 ? (tbTested / tbPresumptive) * 100 : 0,
+            DiagnosedTB: diagTB,
+            PctTBPositivity: tbTested > 0 ? (diagTB / tbTested) * 100 : 0,
+            OnATT: onAtt,
+            PctOnATT: diagTB > 0 ? (onAtt / diagTB) * 100 : 0
+        });
+    });
+
+    const module3Rows = [];
+    facilities.forEach(f => {
+        const code = f.PrisonOCSCode;
+        const weeks = reportsCountByCode[code] || 0;
+        const camps = reportedCampByCode[code] || 0;
+        const hivTested = reportedHIVByCode[code] || 0;
+        const hivPos = reportedHIVPosByCode[code] || 0;
+        const onArt = reportedOnARTByCode[code] || 0;
+        const tbScreened = reportedTBScreenedByCode[code] || 0;
+        const tbPres = reportedTBPresByCode[code] || 0;
+        const tbTested = reportedTBTestedByCode[code] || 0;
+        const tbDiag = reportedTBDiagByCode[code] || 0;
+        const tbAtt = reportedOnATTByCode[code] || 0;
+        const hhxrScreened = reportedHHXRScreenedByCode[code] || 0;
+        const hhxrPres = reportedHHXRPresByCode[code] || 0;
+        const hhxrTested = reportedHHXRTestedByCode[code] || 0;
+        const hhxrDiag = reportedHHXRDiagByCode[code] || 0;
+        const hhxrAtt = reportedHHXRAttByCode[code] || 0;
+
+        module3Rows.push({
+            PrisonOCSCode: code,
+            Name: f.Name,
+            Type: f.Type,
+            PCID: f.CreatedByUser,
+            WeeksReported: weeks,
+            TotalCamp: camps,
+            Target: f.Target,
+            TestedHIV: hivTested,
+            PctAchieved: f.Target > 0 ? (hivTested / f.Target) * 100 : 0,
+            HIVPositive: hivPos,
+            OnART: onArt,
+            PctOnART: hivPos > 0 ? (onArt / hivPos) * 100 : 0,
+            ScreenedTB: tbScreened,
+            TBPresumptive: tbPres,
+            TestedTB: tbTested,
+            DiagnosedTB: tbDiag,
+            OnATT: tbAtt,
+            HHXRScreened: hhxrScreened,
+            HHXRPresumptive: hhxrPres,
+            HHXRTested: hhxrTested,
+            HHXRDiagnosed: hhxrDiag,
+            HHXROnATT: hhxrAtt
+        });
+    });
+
+    appState.data = {
+        Overview: {
+            PrisonPie: { labels: Object.keys(prisonPie), values: Object.values(prisonPie) },
+            OCSPie: { labels: Object.keys(ocsPie), values: Object.values(ocsPie) },
+            Trends: trendsData
+        },
+        Module2: module2Rows,
+        Module3: module3Rows
+    };
+
+    const allFac = facilities;
+    const allPU = [...new Set(filteredProgress.map(p => p.PU).filter(Boolean))].sort();
+    const allTypes = [...new Set(facilities.map(f => f.Type).filter(Boolean))].sort();
+
+    return { states: [...new Set(allFac.map(f => f.State).filter(Boolean))].sort(), pus: allPU, types: allTypes };
+}
+
+// --- Render functions (mostly unchanged from server version) ---
+
+function renderDashboard() {
+    const meta = processDashboardData();
+    populateFilters(meta);
+    updateOverviewTab();
+    updateReportedSummaryTab();
+    updateFacilityProgressTab();
+}
+
+function populateFilters(meta) {
+    const stateSelect = document.getElementById('filterState');
+    const curState = stateSelect.value;
+    stateSelect.innerHTML = '<option value="All">All States</option>';
+    meta.states.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s; opt.innerText = s; stateSelect.appendChild(opt);
+    });
+    stateSelect.value = curState;
+
+    const puSelect = document.getElementById('filterPU');
+    const curPU = puSelect.value;
+    puSelect.innerHTML = '<option value="All">All PUs</option>';
+    meta.pus.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.innerText = p; puSelect.appendChild(opt);
+    });
+    puSelect.value = curPU;
+
+    const typeSelect = document.getElementById('filterPrisonType');
+    const curType = typeSelect.value;
+    typeSelect.innerHTML = '<option value="All">All Classifications</option>';
+    meta.types.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.innerText = t; typeSelect.appendChild(opt);
+    });
+    typeSelect.value = curType;
+
+    document.getElementById('lastLoadedLabel').innerText = 'Data processed in browser';
+}
+
+function updateOverviewTab() {
+    const data = appState.data;
+    if (!data) return;
+
+    let totalTestedHIV = 0, totalScreenedTB = 0, totalHIVPos = 0, totalOnART = 0, totalTBDiag = 0, totalOnATT = 0, totalTarget = 0;
+
+    data.Module2.forEach(row => {
+        totalTestedHIV += row.TestedHIV;
+        totalScreenedTB += row.ScreenedTB;
+        totalHIVPos += row.HIVPositive;
+        totalOnART += row.OnART;
+        totalTBDiag += row.DiagnosedTB;
+        totalOnATT += row.OnATT;
+        totalTarget += row.MonthlyTarget;
+    });
+
+    document.getElementById('metricHIVTested').innerText = totalTestedHIV.toLocaleString();
+    document.getElementById('metricHIVPos').innerText = totalHIVPos.toLocaleString();
+    document.getElementById('metricTBScreened').innerText = totalScreenedTB.toLocaleString();
+    document.getElementById('metricTBDiag').innerText = totalTBDiag.toLocaleString();
+
+    const achieveHIV = totalTarget > 0 ? (totalTestedHIV / totalTarget) * 100 : 0;
+    document.getElementById('subHIVTested').innerText = `${achieveHIV.toFixed(1)}% target achieved (Target: ${Math.round(totalTarget).toLocaleString()})`;
+    const linkageHIV = totalHIVPos > 0 ? (totalOnART / totalHIVPos) * 100 : 0;
+    document.getElementById('subHIVART').innerText = `${totalOnART.toLocaleString()} initiated on ART (${linkageHIV.toFixed(1)}% linkage)`;
+    const pctScreenedTB = totalTarget > 0 ? (totalScreenedTB / totalTarget) * 100 : 0;
+    document.getElementById('subTBScreened').innerText = `${pctScreenedTB.toFixed(1)}% target screened`;
+    const linkageTB = totalTBDiag > 0 ? (totalOnATT / totalTBDiag) * 100 : 0;
+    document.getElementById('subTBATT').innerText = `${totalOnATT.toLocaleString()} initiated ATT (${linkageTB.toFixed(1)}% linkage)`;
+
+    renderPrisonPieChart(data.Overview.PrisonPie);
+    renderOCSPieChart(data.Overview.OCSPie);
+    renderTrendsCharts(data.Overview.Trends);
+}
+
+function renderPrisonPieChart(pieData) {
+    if (charts.prisonPie) charts.prisonPie.destroy();
+    if (!pieData || !pieData.labels.length) return;
+    const ctx = document.getElementById('prisonPieChart').getContext('2d');
+    charts.prisonPie = new Chart(ctx, {
+        type: 'pie',
+        data: { labels: pieData.labels, datasets: [{ data: pieData.values, backgroundColor: ['#0284c7', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd', '#e0f2fe', '#f0f9ff', '#0369a1'], borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e2e8f0', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#0b0f19', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
+    });
+}
+
+function renderOCSPieChart(pieData) {
+    if (charts.ocsPie) charts.ocsPie.destroy();
+    if (!pieData || !pieData.labels.length) return;
+    const ctx = document.getElementById('ocsPieChart').getContext('2d');
+    charts.ocsPie = new Chart(ctx, {
+        type: 'pie',
+        data: { labels: pieData.labels, datasets: [{ data: pieData.values, backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5', '#ecfdf5', '#047857', '#065f46'], borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e2e8f0', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#0b0f19', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
+    });
+}
+
+function renderTrendsCharts(trends) {
+    if (charts.hivTrend) charts.hivTrend.destroy();
+    if (charts.tbTrend) charts.tbTrend.destroy();
+    if (!trends || !trends.labels.length) return;
+    const ctxHIV = document.getElementById('hivTrendChart').getContext('2d');
+    const ctxTB = document.getElementById('tbTrendChart').getContext('2d');
+    const config = { font: { family: 'Outfit' } };
+
+    charts.hivTrend = new Chart(ctxHIV, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'HIV Testing Cases', data: trends.HIVValues, backgroundColor: '#38bdf8', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+
+    charts.tbTrend = new Chart(ctxTB, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'TB Screening Cases', data: trends.TBValues, backgroundColor: '#f59e0b', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+}
+
+function updateReportedSummaryTab() {
+    const data = appState.data;
+    if (!data) return;
+    const body = document.getElementById('reportedSummaryBody');
+    body.innerHTML = '';
+
+    let tots = { prison:0, reported:0, not:0, d0:0, r1:0, r2:0, r3:0, r4:0, r5:0, target:0, hiv:0, pos:0, art:0, tbs:0, tbp:0, tbt:0, tbd:0, att:0 };
+    data.Module2.forEach(row => {
+        tots.prison += row.NoOfPrison; tots.reported += row.NoOfPrisonReported; tots.not += row.NoOfPrisonNotReported; tots.d0 += row.NoOfPrisonReported0;
+        tots.r1 += row.Reported1; tots.r2 += row.Reported2; tots.r3 += row.Reported3; tots.r4 += row.Reported4; tots.r5 += row.Reported5;
+        tots.target += row.MonthlyTarget; tots.hiv += row.TestedHIV; tots.pos += row.HIVPositive; tots.art += row.OnART;
+        tots.tbs += row.ScreenedTB; tots.tbp += row.TBPresumptive; tots.tbt += row.TestedTB; tots.tbd += row.DiagnosedTB; tots.att += row.OnATT;
+    });
+
+    const totalsTr = document.createElement('tr');
+    totalsTr.className = 'total-row';
+    totalsTr.innerHTML = `<td style="position:sticky; left:0; z-index:9; background:rgba(30, 41, 59, 0.9);">Total</td>
+        <td>${tots.prison}</td><td>${tots.reported}</td><td>${tots.not}</td><td>${formatNum(tots.d0)}</td><td>${formatNum(tots.r1)}</td><td>${formatNum(tots.r2)}</td><td>${formatNum(tots.r3)}</td><td>${formatNum(tots.r4)}</td><td>${formatNum(tots.r5)}</td><td>${formatNum(tots.target)}</td><td>${formatNum(tots.hiv)}</td><td>${formatNum(tots.target>0?tots.hiv/tots.target*100:0, true)}</td><td>${formatNum(tots.pos)}</td><td>${formatNum(tots.art)}</td><td>${formatNum(tots.pos>0?tots.art/tots.pos*100:0, true)}</td>
+        <td>${formatNum(tots.tbs)}</td><td>${formatNum(tots.target>0?tots.tbs/tots.target*100:0, true)}</td><td>${formatNum(tots.tbp)}</td><td>${formatNum(tots.tbs>0?tots.tbp/tots.tbs*100:0, true)}</td><td>${formatNum(tots.tbt)}</td><td>${formatNum(tots.tbp>0?tots.tbt/tots.tbp*100:0, true)}</td><td>${formatNum(tots.tbd)}</td><td>${formatNum(tots.tbt>0?tots.tbd/tots.tbt*100:0, true)}</td><td>${formatNum(tots.att)}</td><td>${formatNum(tots.tbd>0?tots.att/tots.tbd*100:0, true)}</td>`;
+    body.appendChild(totalsTr);
+
+    data.Module2.forEach(row => {
+        if (row.NoOfPrison === 0 && row.TestedHIV === 0 && row.ScreenedTB === 0) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="position:sticky; left:0; z-index:9; background:var(--bg-card); font-weight:600;">${row.Type}</td>
+            <td>${row.NoOfPrison}</td><td>${row.NoOfPrisonReported}</td><td>${row.NoOfPrisonNotReported}</td><td>${formatNum(row.NoOfPrisonReported0)}</td><td>${formatNum(row.Reported1)}</td><td>${formatNum(row.Reported2)}</td><td>${formatNum(row.Reported3)}</td><td>${formatNum(row.Reported4)}</td><td>${formatNum(row.Reported5)}</td><td>${formatNum(row.MonthlyTarget)}</td><td>${formatNum(row.TestedHIV)}</td><td>${formatNum(row.PctAchieved, true)}</td><td>${formatNum(row.HIVPositive)}</td><td>${formatNum(row.OnART)}</td><td>${formatNum(row.PctOnART, true)}</td>
+            <td>${formatNum(row.ScreenedTB)}</td><td>${formatNum(row.PctTBScreened, true)}</td><td>${formatNum(row.TBPresumptive)}</td><td>${formatNum(row.PctPresumptive, true)}</td><td>${formatNum(row.TestedTB)}</td><td>${formatNum(row.PctTested, true)}</td><td>${formatNum(row.DiagnosedTB)}</td><td>${formatNum(row.PctTBPositivity, true)}</td><td>${formatNum(row.OnATT)}</td><td>${formatNum(row.PctOnATT, true)}</td>`;
+        body.appendChild(tr);
+    });
+}
+
+function updateFacilityProgressTab() {
+    if (!appState.data) return;
+    let list = appState.data.Module3;
+    const q = appState.facilityTable.searchQuery.toLowerCase().trim();
+    if (q !== '') list = list.filter(row => row.Name.toLowerCase().includes(q) || row.PrisonOCSCode.toLowerCase().includes(q) || row.PCID.toLowerCase().includes(q));
+
+    const sortBy = appState.facilityTable.sortBy;
+    const order = appState.facilityTable.sortOrder === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+        let valA = a[sortBy], valB = b[sortBy];
+        return (typeof valA === 'string' ? valA.localeCompare(valB) : valA - valB) * order;
+    });
+
+    const totalCount = list.length;
+    const pageSize = appState.facilityTable.pageSize;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (appState.facilityTable.currentPage > totalPages) appState.facilityTable.currentPage = totalPages;
+
+    const startIdx = (appState.facilityTable.currentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, totalCount);
+    const paginatedList = list.slice(startIdx, endIdx);
+
+    const body = document.getElementById('progressFacilityBody');
+    body.innerHTML = '';
+    if (paginatedList.length === 0) {
+        body.innerHTML = `<tr><td colspan="22" style="text-align:center; padding: 40px; color:var(--text-muted);">No matching facility records found.</td></tr>`;
+        document.getElementById('paginationInfo').innerText = 'Showing 0-0 of 0 facilities';
+        document.getElementById('prevPageBtn').disabled = true; document.getElementById('nextPageBtn').disabled = true;
+        return;
+    }
+
+    paginatedList.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><code class="badge badge-primary">${row.PrisonOCSCode}</code></td><td style="font-weight:600; white-space:normal; min-width:200px;">${row.Name}</td><td>${row.Type}</td><td>${row.PCID}</td><td>${row.WeeksReported}</td><td>${formatNum(row.TotalCamp)}</td><td>${formatNum(row.Target)}</td><td>${formatNum(row.TestedHIV)}</td><td>${formatNum(row.PctAchieved, true)}</td><td>${formatNum(row.HIVPositive)}</td><td>${formatNum(row.OnART)}</td><td>${formatNum(row.PctOnART, true)}</td><td>${formatNum(row.ScreenedTB)}</td><td>${formatNum(row.TBPresumptive)}</td><td>${formatNum(row.TestedTB)}</td><td>${formatNum(row.DiagnosedTB)}</td><td>${formatNum(row.OnATT)}</td><td>${formatNum(row.HHXRScreened)}</td><td>${formatNum(row.HHXRPresumptive)}</td><td>${formatNum(row.HHXRTested)}</td><td>${formatNum(row.HHXRDiagnosed)}</td><td>${formatNum(row.HHXROnATT)}</td>`;
+        body.appendChild(tr);
+    });
+
+    document.getElementById('paginationInfo').innerText = `Showing ${startIdx + 1}-${endIdx} of ${totalCount} facilities`;
+    document.getElementById('prevPageBtn').disabled = appState.facilityTable.currentPage === 1;
+    document.getElementById('nextPageBtn').disabled = appState.facilityTable.currentPage === totalPages;
+}
+
+// --- Event Listeners ---
+
+document.getElementById('applyFiltersBtn').addEventListener('click', () => {
+    appState.filters.state = document.getElementById('filterState').value;
+    appState.filters.facilityType = document.getElementById('filterFacilityType').value;
+    appState.filters.prisonType = document.getElementById('filterPrisonType').value;
+    appState.filters.pu = document.getElementById('filterPU').value;
+    appState.filters.startDate = document.getElementById('filterStartDate').value;
+    appState.filters.endDate = document.getElementById('filterEndDate').value;
+    renderDashboard();
+});
+
+document.getElementById('trendGroupBy').addEventListener('change', (e) => {
+    appState.filters.groupBy = e.target.value;
+    renderDashboard();
+});
+
+document.getElementById('syncDataBtn').addEventListener('click', () => {
+    const allLoaded = Object.values(appState.filesLoaded).every(v => v);
+    if (!allLoaded) {
+        alert('Please upload all four Excel files before synchronizing.');
+        return;
+    }
+    showSpinner('Processing data...');
+    setTimeout(() => {
+        renderDashboard();
+        navigateToSection('overviewSection');
+        hideSpinner();
+    }, 50);
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    if (!appState.data || !appState.data.Module3) {
+        alert('No data available to export.');
+        return;
+    }
+    const data = appState.data.Module3;
+    if (data.length === 0) { alert('No records found to export.'); return; }
+    const headers = Object.keys(data[0]);
+    const csvRows = [];
+    csvRows.push(headers.join(','));
+    data.forEach(row => {
+        const values = headers.map(header => {
+            const val = row[header];
+            const escaped = ('' + val).replace(/"/g, '""');
+            return `"${escaped}"`;
+        });
+        csvRows.push(values.join(','));
+    });
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Subhiksha_Facility_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+});
+
+document.getElementById('prevPageBtn').addEventListener('click', () => {
+    if (appState.facilityTable.currentPage > 1) {
+        appState.facilityTable.currentPage--;
+        updateFacilityProgressTab();
+    }
+});
+document.getElementById('nextPageBtn').addEventListener('click', () => {
+    if (!appState.data) return;
+    const totalCount = appState.data.Module3.length;
+    const totalPages = Math.ceil(totalCount / appState.facilityTable.pageSize);
+    if (appState.facilityTable.currentPage < totalPages) {
+        appState.facilityTable.currentPage++;
+        updateFacilityProgressTab();
+    }
+});
+document.getElementById('searchTableInput').addEventListener('input', (e) => {
+    appState.facilityTable.searchQuery = e.target.value;
+    appState.facilityTable.currentPage = 1;
+    updateFacilityProgressTab();
+});
+
+// --- Init ---
+
+document.getElementById('filterStartDate').value = appState.filters.startDate;
+document.getElementById('filterEndDate').value = appState.filters.endDate;
+navigateToSection('uploadSection');
