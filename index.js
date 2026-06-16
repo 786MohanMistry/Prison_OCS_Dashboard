@@ -323,6 +323,7 @@ function parseProgressFile(data) {
             StartDate: xlToDate(r['Start Date']),
             EndDate: xlToDate(r['End Date']),
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
+            ReportedStatus: ('' + getCol(r, ['Counselling/Testing/Linkage Happened']) || '').trim(),
             TestedHIV: testedCamp + testedFICTC + testedSAICTC,
             ScreenedTB: c10S + cDD + c4S,
             TBPresumptive: cDH,
@@ -445,6 +446,12 @@ function processDashboardData() {
         return true;
     });
 
+    // Only keep progress records where ReportedStatus is Yes or No
+    const reportedProgress = filteredProgress.filter(p => {
+        const s = (p.ReportedStatus || '').toLowerCase();
+        return s === 'yes' || s === 'no';
+    });
+
     let filterStart = null, filterEnd = null;
     if (f.pu !== 'All') {
         filteredProgress.forEach(p => {
@@ -470,7 +477,7 @@ function processDashboardData() {
     const reportedHHXRTestedByCode = {};
     const reportedCampByCode = {};
 
-    filteredProgress.forEach(p => {
+    reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
         reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
         reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
@@ -712,6 +719,12 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
         return true;
     });
 
+    // Only keep progress records where ReportedStatus is Yes or No
+    const reportedProgress = filteredProgress.filter(p => {
+        const s = (p.ReportedStatus || '').toLowerCase();
+        return s === 'yes' || s === 'no';
+    });
+
     const reportsCountByCode = {};
     const reportedHIVByCode = {};
     const reportedTBScreenedByCode = {};
@@ -722,7 +735,7 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     const reportedHHXRTestedByCode = {};
     const reportedCampByCode = {};
 
-    filteredProgress.forEach(p => {
+    reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
         reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
         reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
