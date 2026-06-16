@@ -55,14 +55,10 @@ async function loadAllFromPreprocessed() {
         appState.raw.progress.forEach(p => {
             p.PU = calculatePU(p.ReportingMonth || p.EndDate);
         });
-        saveRawToStorage();
-        showSpinner('Processing data...');
-        setTimeout(() => {
-            renderDashboard();
-            navigateToSection('overviewSection');
-            hideSpinner();
-            document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
-        }, 50);
+        renderDashboard();
+        navigateToSection('overviewSection');
+        hideSpinner();
+        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
     } catch (err) {
         console.warn('Preprocessed JSON not found at', JSON_FILES, '-', err.message);
         console.warn('Falling back to XLSX loading...');
@@ -91,14 +87,10 @@ async function loadAllFromXLSX() {
             appState.raw[type] = parsed;
             appState.filesLoaded[type] = true;
         });
-        saveRawToStorage();
-        showSpinner('Processing data...');
-        setTimeout(() => {
-            renderDashboard();
-            navigateToSection('overviewSection');
-            hideSpinner();
-            document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
-        }, 50);
+        renderDashboard();
+        navigateToSection('overviewSection');
+        hideSpinner();
+        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
     } catch (err) {
         hideSpinner();
         alert('Failed to load from GitHub: ' + err.message);
@@ -185,7 +177,6 @@ function saveRawToStorage() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         return true;
     } catch (e) {
-        console.warn('localStorage save failed (quota exceeded?):', e);
         return false;
     }
 }
@@ -1150,6 +1141,4 @@ function restoreSavedFiles() {
 
 // --- Init ---
 
-if (!restoreSavedFiles()) {
-    loadAllFromGitHub();
-}
+loadAllFromGitHub();
