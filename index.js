@@ -22,7 +22,7 @@ let appState = {
     filesLoaded: { facility: false, progress: false, hiv: false, tb: false }
 };
 
-const GITHUB_BASE = 'https://cdn.jsdelivr.net/gh/786MohanMistry/Prison_OCS_Dashboard@main/';
+const GITHUB_BASE = 'https://raw.githubusercontent.com/786MohanMistry/Prison_OCS_Dashboard/main/';
 const JSON_FILES = {
     facility: GITHUB_BASE + 'facility.json',
     progress: GITHUB_BASE + 'progress.json',
@@ -64,7 +64,8 @@ async function loadAllFromPreprocessed() {
             document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
         }, 50);
     } catch (err) {
-        console.warn('JSON load failed, trying XLSX fallback:', err.message);
+        console.warn('Preprocessed JSON not found at', JSON_FILES, '-', err.message);
+        console.warn('Falling back to XLSX loading...');
         await loadAllFromXLSX();
     }
 }
