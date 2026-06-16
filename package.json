@@ -1,0 +1,10 @@
+{
+  "name": "prison-ocs-dashboard",
+  "type": "module",
+  "scripts": {
+    "preprocess": "node preprocess.mjs"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

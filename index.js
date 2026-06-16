@@ -23,18 +23,57 @@ let appState = {
 };
 
 const GITHUB_BASE = 'https://cdn.jsdelivr.net/gh/786MohanMistry/Prison_OCS_Dashboard@main/';
-const GITHUB_FILES = {
+const JSON_FILES = {
+    facility: GITHUB_BASE + 'facility.json',
+    progress: GITHUB_BASE + 'progress.json',
+    hiv: GITHUB_BASE + 'hiv.json',
+    tb: GITHUB_BASE + 'tb.json'
+};
+const XLSX_FILES = {
     facility: { name: 'Facility_Data.xlsx', url: GITHUB_BASE + 'Facility_Data.xlsx' },
     progress: { name: '1_P&OCS Progress.xlsx', url: GITHUB_BASE + '1_P%26OCS%20Progress.xlsx' },
     hiv: { name: '2_HIV_Positive.xlsx', url: GITHUB_BASE + '2_HIV_Positive.xlsx' },
     tb: { name: '3_TB Positive.xlsx', url: GITHUB_BASE + '3_TB%20Positive.xlsx' }
 };
 
-async function loadAllFromGitHub() {
-    showSpinner('Downloading data from GitHub...');
+async function loadAllFromPreprocessed() {
+    showSpinner('Loading data...');
     try {
-        const results = await Promise.all(Object.keys(GITHUB_FILES).map(async (type) => {
-            const info = GITHUB_FILES[type];
+        const results = await Promise.all(Object.keys(JSON_FILES).map(async (type) => {
+            const resp = await fetch(JSON_FILES[type]);
+            if (!resp.ok) throw new Error(type + '.json: HTTP ' + resp.status);
+            return { type, data: await resp.json() };
+        }));
+        results.forEach(({ type, data }) => {
+            appState.raw[type] = data;
+            appState.filesLoaded[type] = true;
+            updateFileBadge(type, data.length);
+        });
+        restoreDatesInPlace(appState.raw.progress, DATE_FIELDS_PROGRESS);
+        restoreDatesInPlace(appState.raw.hiv, DATE_FIELDS_HIV);
+        restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
+        appState.raw.progress.forEach(p => {
+            p.PU = calculatePU(p.ReportingMonth || p.EndDate);
+        });
+        saveRawToStorage();
+        showSpinner('Processing data...');
+        setTimeout(() => {
+            renderDashboard();
+            navigateToSection('overviewSection');
+            hideSpinner();
+            document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
+        }, 50);
+    } catch (err) {
+        console.warn('JSON load failed, trying XLSX fallback:', err.message);
+        await loadAllFromXLSX();
+    }
+}
+
+async function loadAllFromXLSX() {
+    showSpinner('Downloading Excel files...');
+    try {
+        const results = await Promise.all(Object.keys(XLSX_FILES).map(async (type) => {
+            const info = XLSX_FILES[type];
             const resp = await fetch(info.url);
             if (!resp.ok) throw new Error(info.name + ': HTTP ' + resp.status);
             const buf = await resp.arrayBuffer();
@@ -64,6 +103,10 @@ async function loadAllFromGitHub() {
         alert('Failed to load from GitHub: ' + err.message);
         console.error(err);
     }
+}
+
+function loadAllFromGitHub() {
+    return loadAllFromPreprocessed();
 }
 
 Chart.register(ChartDataLabels);
