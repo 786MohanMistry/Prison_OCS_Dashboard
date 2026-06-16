@@ -2,6 +2,7 @@
 
 let appState = {
     raw: { facilities: [], progress: [], hiv: [], tb: [] },
+    staged: { facility: null, progress: null, hiv: null, tb: null },
     data: null,
     filters: {
         state: 'All',
@@ -9,7 +10,7 @@ let appState = {
         prisonType: 'All',
         pu: 'All',
         startDate: '2024-04-01',
-        endDate: '2026-06-06',
+        endDate: '2026-12-31',
         groupBy: 'Month'
     },
     facilityTable: {
@@ -179,6 +180,12 @@ function getCol(obj, names) {
         const idx = lower.indexOf(kl);
         if (idx !== -1) return obj[names[idx]];
     }
+    for (const k of keys) {
+        const kl = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (let i = 0; i < names.length; i++) {
+            if (lower[i].replace(/[^a-z0-9]/g, '') === kl) return obj[names[i]];
+        }
+    }
     console.warn('None of [' + names.join('], [') + '] found in row');
     return undefined;
 }
@@ -187,7 +194,7 @@ function parseFacilityFile(data) {
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
     const ws = wb.Sheets['Facility Data'] || wb.Sheets[wb.SheetNames[0]];
     const rows = sheetToArray(ws);
-    appState.raw.facilities = rows.map(r => ({
+    return rows.map(r => ({
         FacilityAppID: ('' + (r['Facility AppID'] || '')).trim(),
         Name: ('' + (r['Name of Prison/OCS'] || '')).trim(),
         Type: ('' + (r['Type of Prison/OCS'] || '')).trim(),
@@ -197,7 +204,6 @@ function parseFacilityFile(data) {
         PrisonOCSCode: ('' + (r['Prison/OCS ID'] || '')).trim(),
         CreatedByUser: ('' + (r['Created By User'] || '')).trim()
     })).filter(f => f.PrisonOCSCode !== '');
-    return appState.raw.facilities;
 }
 
 function parseProgressFile(data) {
@@ -207,7 +213,7 @@ function parseProgressFile(data) {
     if (rows.length > 0) {
         console.log('Progress column headers:', Object.keys(rows[0]).join(', '));
     }
-    appState.raw.progress = rows.map(r => {
+    return rows.map(r => {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         const c10S = toNum(getCol(r, ['Number of inmates screened for TB through 10S--.Total']));
@@ -233,7 +239,6 @@ function parseProgressFile(data) {
             PU: ('' + (r['PU'] || '')).trim()
         };
     }).filter(r => r !== null);
-    return appState.raw.progress;
 }
 
 function parseHIVFile(data) {
@@ -243,7 +248,7 @@ function parseHIVFile(data) {
     if (rows.length > 0) {
         console.log('HIV column headers:', Object.keys(rows[0]).join(', '));
     }
-    appState.raw.hiv = rows.map(r => {
+    return rows.map(r => {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         return {
@@ -255,7 +260,6 @@ function parseHIVFile(data) {
             ARTInitDate: xlToDate(getCol(r, ['Date of ART initiation']))
         };
     }).filter(r => r !== null);
-    return appState.raw.hiv;
 }
 
 function parseTBFile(data) {
@@ -265,7 +269,7 @@ function parseTBFile(data) {
     if (rows.length > 0) {
         console.log('TB column headers:', Object.keys(rows[0]).join(', '));
     }
-    appState.raw.tb = rows.map(r => {
+    return rows.map(r => {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         return {
@@ -278,7 +282,6 @@ function parseTBFile(data) {
             ATTInitDate: xlToDate(getCol(r, ['Date of ART initiation']))
         };
     }).filter(r => r !== null);
-    return appState.raw.tb;
 }
 
 function updateFileBadge(type, rows) {
@@ -302,14 +305,14 @@ document.querySelectorAll('.excel-file-input').forEach(input => {
         try {
             const buf = await file.arrayBuffer();
             const data = new Uint8Array(buf);
-            let count = 0;
-            if (type === 'facility') count = parseFacilityFile(data).length;
-            else if (type === 'progress') count = parseProgressFile(data).length;
-            else if (type === 'hiv') count = parseHIVFile(data).length;
-            else if (type === 'tb') count = parseTBFile(data).length;
+            let parsed = [];
+            if (type === 'facility') parsed = parseFacilityFile(data);
+            else if (type === 'progress') parsed = parseProgressFile(data);
+            else if (type === 'hiv') parsed = parseHIVFile(data);
+            else if (type === 'tb') parsed = parseTBFile(data);
+            appState.staged[type] = parsed;
             appState.filesLoaded[type] = true;
-            updateFileBadge(type, count);
-            saveRawToStorage();
+            updateFileBadge(type, parsed.length);
         } catch (err) {
             alert('Error reading file: ' + err.message);
             console.error(err);
@@ -367,7 +370,7 @@ function processDashboardData() {
         reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
         reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
         reportedTBScreenedByCode[code] = (reportedTBScreenedByCode[code] || 0) + p.ScreenedTB;
-        reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.PresumptiveTB;
+        reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
         reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
         reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + p.HHXRPresumptive;
@@ -796,6 +799,13 @@ document.getElementById('syncDataBtn').addEventListener('click', () => {
         alert('Please upload all four Excel files before synchronizing.');
         return;
     }
+    Object.keys(appState.staged).forEach(type => {
+        if (appState.staged[type] !== null) {
+            appState.raw[type] = appState.staged[type];
+            appState.staged[type] = null;
+        }
+    });
+    saveRawToStorage();
     showSpinner('Processing data...');
     setTimeout(() => {
         renderDashboard();
