@@ -233,6 +233,7 @@ function parseProgressFile(data) {
         const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray--.Total']));
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
         const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
+        const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
         const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
         const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
         const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
@@ -242,7 +243,7 @@ function parseProgressFile(data) {
             EndDate: xlToDate(r['End Date']),
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
             TestedHIV: testedCamp + testedFICTC + testedSAICTC,
-            ScreenedTB: c10S + cDD,
+            ScreenedTB: c10S + cDD + c4S,
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
@@ -363,6 +364,19 @@ function processDashboardData() {
         return true;
     });
 
+    let filterStart = null, filterEnd = null;
+    if (f.pu !== 'All') {
+        filteredProgress.forEach(p => {
+            const d = p.ReportingMonth || p.EndDate;
+            if (d) {
+                if (!filterStart || d < filterStart) filterStart = d;
+                if (!filterEnd || d > filterEnd) filterEnd = d;
+            }
+        });
+        if (filterStart) filterStart = new Date(filterStart.getFullYear(), filterStart.getMonth(), 1);
+        if (filterEnd) filterEnd = new Date(filterEnd.getFullYear(), filterEnd.getMonth() + 1, 0);
+    }
+
     const reportsCountByCode = {};
     const reportedHIVByCode = {};
     const reportedTBScreenedByCode = {};
@@ -389,12 +403,16 @@ function processDashboardData() {
     const reportedHIVPosByCode = {};
     raw.hiv.forEach(h => {
         if (!facCodes.has(h.PrisonOCSCode)) return;
+        if (filterStart && h.HIVConfDate && h.HIVConfDate < filterStart) return;
+        if (filterEnd && h.HIVConfDate && h.HIVConfDate > filterEnd) return;
         reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
     });
 
     const reportedOnARTByCode = {};
     raw.hiv.forEach(h => {
         if (!facCodes.has(h.PrisonOCSCode)) return;
+        if (filterStart && h.HIVConfDate && h.HIVConfDate < filterStart) return;
+        if (filterEnd && h.HIVConfDate && h.HIVConfDate > filterEnd) return;
         reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
     });
 
@@ -402,6 +420,8 @@ function processDashboardData() {
     const reportedOnATTByCode = {};
     raw.tb.forEach(t => {
         if (!facCodes.has(t.PrisonOCSCode)) return;
+        if (filterStart && t.TBTestDate && t.TBTestDate < filterStart) return;
+        if (filterEnd && t.TBTestDate && t.TBTestDate > filterEnd) return;
         reportedTBDiagByCode[t.PrisonOCSCode] = (reportedTBDiagByCode[t.PrisonOCSCode] || 0) + t.DiagnosedTB;
         reportedOnATTByCode[t.PrisonOCSCode] = (reportedOnATTByCode[t.PrisonOCSCode] || 0) + t.OnATT;
     });
@@ -411,6 +431,8 @@ function processDashboardData() {
     raw.tb.forEach(t => {
         if (!facCodes.has(t.PrisonOCSCode)) return;
         if (t.Mode !== 'Handheld X-Ray') return;
+        if (filterStart && t.TBTestDate && t.TBTestDate < filterStart) return;
+        if (filterEnd && t.TBTestDate && t.TBTestDate > filterEnd) return;
         reportedHHXRDiagByCode[t.PrisonOCSCode] = (reportedHHXRDiagByCode[t.PrisonOCSCode] || 0) + t.DiagnosedTB;
         reportedHHXRAttByCode[t.PrisonOCSCode] = (reportedHHXRAttByCode[t.PrisonOCSCode] || 0) + t.OnATT;
     });
@@ -577,7 +599,10 @@ function processDashboardData() {
     };
 
     const allFac = facilities;
-    const allPU = [...new Set(filteredProgress.map(p => p.PU).filter(Boolean))].sort();
+    const allPU = [...new Set(filteredProgress.map(p => p.PU).filter(Boolean))].filter(pu => {
+        const n = parseInt(pu.replace('PU', ''), 10);
+        return !isNaN(n) && n >= 1;
+    }).sort();
     const allTypes = [...new Set(facilities.map(f => f.Type).filter(Boolean))].sort();
 
     return { states: [...new Set(allFac.map(f => f.State).filter(Boolean))].sort(), pus: allPU, types: allTypes };
@@ -1001,6 +1026,9 @@ function restoreSavedFiles() {
         restoreDatesInPlace(appState.raw.progress, DATE_FIELDS_PROGRESS);
         restoreDatesInPlace(appState.raw.hiv, DATE_FIELDS_HIV);
         restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
+        appState.raw.progress.forEach(p => {
+            p.PU = calculatePU(p.ReportingMonth || p.EndDate);
+        });
 
         const allLoaded = Object.values(appState.filesLoaded).every(v => v);
         if (allLoaded) {
