@@ -234,6 +234,8 @@ function parseProgressFile(data) {
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
         const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
         const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
+        const cDH_HHXR = toNum(getCol(r, ['Number of inmates found TB Symptomatic through Handheld X-ray--.Total']));
+        const cDL_HHXR = toNum(getCol(r, ['Number of symptomatic inmates tested for TB through Handheld X-ray--.Total']));
         const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
         const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
         const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
@@ -247,8 +249,8 @@ function parseProgressFile(data) {
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
-            HHXRPresumptive: cDD > 0 ? cDH : 0,
-            HHXRTested: cDD > 0 ? cDL : 0,
+            HHXRPresumptive: cDH_HHXR,
+            HHXRTested: cDL_HHXR,
             TotalCamp: toNum(r['Total Camp']),
             PU: calculatePU(xlToDate(r['Reporting Month(MM/YY)']) || xlToDate(r['End Date']))
         };
@@ -376,6 +378,8 @@ function processDashboardData() {
         if (filterStart) filterStart = new Date(filterStart.getFullYear(), filterStart.getMonth(), 1);
         if (filterEnd) filterEnd = new Date(filterEnd.getFullYear(), filterEnd.getMonth() + 1, 0);
     }
+    const MIN_START = new Date(2024, 3, 1);
+    if (!filterStart || filterStart < MIN_START) filterStart = MIN_START;
 
     const reportsCountByCode = {};
     const reportedHIVByCode = {};
