@@ -22,7 +22,7 @@ let appState = {
     filesLoaded: { facility: false, progress: false, hiv: false, tb: false }
 };
 
-const GITHUB_BASE = 'https://raw.githubusercontent.com/786MohanMistry/Prison_OCS_Dashboard/main/';
+const GITHUB_BASE = 'https://cdn.jsdelivr.net/gh/786MohanMistry/Prison_OCS_Dashboard@main/';
 const GITHUB_FILES = {
     facility: { name: 'Facility_Data.xlsx', url: GITHUB_BASE + 'Facility_Data.xlsx' },
     progress: { name: '1_P&OCS Progress.xlsx', url: GITHUB_BASE + '1_P%26OCS%20Progress.xlsx' },
@@ -31,13 +31,12 @@ const GITHUB_FILES = {
 };
 
 async function loadAllFromGitHub() {
-    const types = Object.keys(GITHUB_FILES);
-    for (const type of types) {
-        const info = GITHUB_FILES[type];
-        showSpinner('Loading ' + info.name + ' from GitHub...');
-        try {
+    showSpinner('Downloading data from GitHub...');
+    try {
+        const results = await Promise.all(Object.keys(GITHUB_FILES).map(async (type) => {
+            const info = GITHUB_FILES[type];
             const resp = await fetch(info.url);
-            if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+            if (!resp.ok) throw new Error(info.name + ': HTTP ' + resp.status);
             const buf = await resp.arrayBuffer();
             const data = new Uint8Array(buf);
             let parsed = [];
@@ -45,24 +44,26 @@ async function loadAllFromGitHub() {
             else if (type === 'progress') parsed = parseProgressFile(data);
             else if (type === 'hiv') parsed = parseHIVFile(data);
             else if (type === 'tb') parsed = parseTBFile(data);
+            updateFileBadge(type, parsed.length);
+            return { type, parsed };
+        }));
+        results.forEach(({ type, parsed }) => {
             appState.raw[type] = parsed;
             appState.filesLoaded[type] = true;
-            updateFileBadge(type, parsed.length);
-        } catch (err) {
+        });
+        saveRawToStorage();
+        showSpinner('Processing data...');
+        setTimeout(() => {
+            renderDashboard();
+            navigateToSection('overviewSection');
             hideSpinner();
-            alert('Failed to load ' + info.name + ' from GitHub: ' + err.message);
-            console.error(err);
-            return;
-        }
-    }
-    saveRawToStorage();
-    showSpinner('Processing data...');
-    setTimeout(() => {
-        renderDashboard();
-        navigateToSection('overviewSection');
+            document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
+        }, 50);
+    } catch (err) {
         hideSpinner();
-        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
-    }, 50);
+        alert('Failed to load from GitHub: ' + err.message);
+        console.error(err);
+    }
 }
 
 Chart.register(ChartDataLabels);
