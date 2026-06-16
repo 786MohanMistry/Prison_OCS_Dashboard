@@ -1,0 +1,13 @@
+# Logs
+server_output.txt
+server_error.txt
+
+# Excel data files (user-specific, not in repo)
+*.xlsx
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Debug scripts (if any remain)
+debug_*.ps1
