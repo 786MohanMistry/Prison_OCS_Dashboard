@@ -22,6 +22,49 @@ let appState = {
     filesLoaded: { facility: false, progress: false, hiv: false, tb: false }
 };
 
+const GITHUB_BASE = 'https://raw.githubusercontent.com/786MohanMistry/Prison_OCS_Dashboard/main/';
+const GITHUB_FILES = {
+    facility: { name: 'Facility_Data.xlsx', url: GITHUB_BASE + 'Facility_Data.xlsx' },
+    progress: { name: '1_P&OCS Progress.xlsx', url: GITHUB_BASE + '1_P%26OCS%20Progress.xlsx' },
+    hiv: { name: '2_HIV_Positive.xlsx', url: GITHUB_BASE + '2_HIV_Positive.xlsx' },
+    tb: { name: '3_TB Positive.xlsx', url: GITHUB_BASE + '3_TB%20Positive.xlsx' }
+};
+
+async function loadAllFromGitHub() {
+    const types = Object.keys(GITHUB_FILES);
+    for (const type of types) {
+        const info = GITHUB_FILES[type];
+        showSpinner('Loading ' + info.name + ' from GitHub...');
+        try {
+            const resp = await fetch(info.url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+            const buf = await resp.arrayBuffer();
+            const data = new Uint8Array(buf);
+            let parsed = [];
+            if (type === 'facility') parsed = parseFacilityFile(data);
+            else if (type === 'progress') parsed = parseProgressFile(data);
+            else if (type === 'hiv') parsed = parseHIVFile(data);
+            else if (type === 'tb') parsed = parseTBFile(data);
+            appState.raw[type] = parsed;
+            appState.filesLoaded[type] = true;
+            updateFileBadge(type, parsed.length);
+        } catch (err) {
+            hideSpinner();
+            alert('Failed to load ' + info.name + ' from GitHub: ' + err.message);
+            console.error(err);
+            return;
+        }
+    }
+    saveRawToStorage();
+    showSpinner('Processing data...');
+    setTimeout(() => {
+        renderDashboard();
+        navigateToSection('overviewSection');
+        hideSpinner();
+        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
+    }, 50);
+}
+
 Chart.register(ChartDataLabels);
 
 let charts = { prisonPie: null, ocsPie: null, hivTrend: null, tbTrend: null };
@@ -954,6 +997,8 @@ document.getElementById('applyProgressDateBtn').addEventListener('click', () => 
     updateFacilityProgressTab();
 });
 
+document.getElementById('githubLoadBtn').addEventListener('click', loadAllFromGitHub);
+
 document.getElementById('syncDataBtn').addEventListener('click', () => {
     const allLoaded = Object.values(appState.filesLoaded).every(v => v);
     if (!allLoaded) {
@@ -1051,12 +1096,15 @@ function restoreSavedFiles() {
 
             renderDashboard();
             navigateToSection('overviewSection');
-            return;
+            return true;
         }
     }
     navigateToSection('uploadSection');
+    return false;
 }
 
 // --- Init ---
 
-restoreSavedFiles();
+if (!restoreSavedFiles()) {
+    loadAllFromGitHub();
+}
