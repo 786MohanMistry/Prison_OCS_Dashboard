@@ -1,7 +1,7 @@
 /* index.js - Standalone (Client-Side) Edition */
 
 let appState = {
-    raw: { facilities: [], progress: [], hiv: [], tb: [] },
+        raw: { facility: [], progress: [], hiv: [], tb: [] },
     staged: { facility: null, progress: null, hiv: null, tb: null },
     data: null,
     filters: {
@@ -23,7 +23,14 @@ let appState = {
 };
 
 const GITHUB_BASE = 'https://raw.githubusercontent.com/786MohanMistry/Prison_OCS_Dashboard/main/';
+const LOCAL_BASE = '';
 const JSON_FILES = {
+    facility: LOCAL_BASE + 'facility.json',
+    progress: LOCAL_BASE + 'progress.json',
+    hiv: LOCAL_BASE + 'hiv.json',
+    tb: LOCAL_BASE + 'tb.json'
+};
+const GITHUB_JSON_FILES = {
     facility: GITHUB_BASE + 'facility.json',
     progress: GITHUB_BASE + 'progress.json',
     hiv: GITHUB_BASE + 'hiv.json',
@@ -36,70 +43,68 @@ const XLSX_FILES = {
     tb: { name: '3_TB Positive.xlsx', url: GITHUB_BASE + '3_TB%20Positive.xlsx' }
 };
 
-async function loadAllFromPreprocessed() {
+async function loadFromJSON(jsonFiles, sourceLabel) {
     showSpinner('Loading data...');
-    try {
-        const results = await Promise.all(Object.keys(JSON_FILES).map(async (type) => {
-            const resp = await fetch(JSON_FILES[type]);
-            if (!resp.ok) throw new Error(type + '.json: HTTP ' + resp.status);
-            return { type, data: await resp.json() };
-        }));
-        results.forEach(({ type, data }) => {
-            appState.raw[type] = data;
-            appState.filesLoaded[type] = true;
-            updateFileBadge(type, data.length);
-        });
-        restoreDatesInPlace(appState.raw.progress, DATE_FIELDS_PROGRESS);
-        restoreDatesInPlace(appState.raw.hiv, DATE_FIELDS_HIV);
-        restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
-        appState.raw.progress.forEach(p => {
-            p.PU = calculatePU(p.ReportingMonth || p.EndDate);
-        });
-        renderDashboard();
-        navigateToSection('overviewSection');
-        hideSpinner();
-        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
-    } catch (err) {
-        console.warn('Preprocessed JSON not found at', JSON_FILES, '-', err.message);
-        console.warn('Falling back to XLSX loading...');
-        await loadAllFromXLSX();
-    }
+    const results = await Promise.all(Object.keys(jsonFiles).map(async (type) => {
+        const resp = await fetch(jsonFiles[type]);
+        if (!resp.ok) throw new Error(type + '.json: HTTP ' + resp.status);
+        return { type, data: await resp.json() };
+    }));
+    results.forEach(({ type, data }) => {
+        appState.raw[type] = data;
+        appState.filesLoaded[type] = true;
+        updateFileBadge(type, data.length);
+    });
+    restoreDatesInPlace(appState.raw.progress, DATE_FIELDS_PROGRESS);
+    restoreDatesInPlace(appState.raw.hiv, DATE_FIELDS_HIV);
+    restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
+    appState.raw.progress.forEach(p => {
+        p.PU = calculatePU(p.ReportingMonth || p.EndDate);
+    });
+    renderDashboard();
+    navigateToSection('overviewSection');
+    hideSpinner();
+    document.getElementById('lastLoadedLabel').innerText = sourceLabel;
 }
 
 async function loadAllFromXLSX() {
     showSpinner('Downloading Excel files...');
-    try {
-        const results = await Promise.all(Object.keys(XLSX_FILES).map(async (type) => {
-            const info = XLSX_FILES[type];
-            const resp = await fetch(info.url);
-            if (!resp.ok) throw new Error(info.name + ': HTTP ' + resp.status);
-            const buf = await resp.arrayBuffer();
-            const data = new Uint8Array(buf);
-            let parsed = [];
-            if (type === 'facility') parsed = parseFacilityFile(data);
-            else if (type === 'progress') parsed = parseProgressFile(data);
-            else if (type === 'hiv') parsed = parseHIVFile(data);
-            else if (type === 'tb') parsed = parseTBFile(data);
-            updateFileBadge(type, parsed.length);
-            return { type, parsed };
-        }));
-        results.forEach(({ type, parsed }) => {
-            appState.raw[type] = parsed;
-            appState.filesLoaded[type] = true;
-        });
-        renderDashboard();
-        navigateToSection('overviewSection');
-        hideSpinner();
-        document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
-    } catch (err) {
-        hideSpinner();
-        alert('Failed to load from GitHub: ' + err.message);
-        console.error(err);
-    }
+    const results = await Promise.all(Object.keys(XLSX_FILES).map(async (type) => {
+        const info = XLSX_FILES[type];
+        const resp = await fetch(info.url);
+        if (!resp.ok) throw new Error(info.name + ': HTTP ' + resp.status);
+        const buf = await resp.arrayBuffer();
+        const data = new Uint8Array(buf);
+        let parsed = [];
+        if (type === 'facility') parsed = parseFacilityFile(data);
+        else if (type === 'progress') parsed = parseProgressFile(data);
+        else if (type === 'hiv') parsed = parseHIVFile(data);
+        else if (type === 'tb') parsed = parseTBFile(data);
+        updateFileBadge(type, parsed.length);
+        return { type, parsed };
+    }));
+    results.forEach(({ type, parsed }) => {
+        appState.raw[type] = parsed;
+        appState.filesLoaded[type] = true;
+    });
+    renderDashboard();
+    navigateToSection('overviewSection');
+    hideSpinner();
+    document.getElementById('lastLoadedLabel').innerText = 'Loaded from GitHub repository';
 }
 
-function loadAllFromGitHub() {
-    return loadAllFromPreprocessed();
+async function loadAllFromGitHub() {
+    try {
+        await loadFromJSON(GITHUB_JSON_FILES, 'Loaded from GitHub repository');
+    } catch (err) {
+        console.warn('GitHub JSON not found, trying XLSX...', err.message);
+        try {
+            await loadAllFromXLSX();
+        } catch (err2) {
+            console.warn('GitHub XLSX also failed:', err2.message);
+            hideSpinner();
+        }
+    }
 }
 
 Chart.register(ChartDataLabels);
@@ -425,7 +430,7 @@ function processDashboardData() {
     const f = appState.filters;
     const raw = appState.raw;
 
-    const facilities = raw.facilities.filter(fac => {
+    const facilities = raw.facility.filter(fac => {
         if (f.state !== 'All' && fac.State !== f.state) return false;
         if (f.facilityType !== 'All' && fac.FacilityType !== f.facilityType) return false;
         if (f.prisonType !== 'All' && fac.Type !== f.prisonType) return false;
@@ -702,7 +707,7 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     const f = appState.filters;
     const raw = appState.raw;
 
-    const facilities = raw.facilities.filter(fac => {
+    const facilities = raw.facility.filter(fac => {
         if (f.state !== 'All' && fac.State !== f.state) return false;
         if (f.facilityType !== 'All' && fac.FacilityType !== f.facilityType) return false;
         if (f.prisonType !== 'All' && fac.Type !== f.prisonType) return false;
@@ -1131,7 +1136,7 @@ function restoreSavedFiles() {
         const allLoaded = Object.values(appState.filesLoaded).every(v => v);
         if (allLoaded) {
             const counts = {
-                facility: appState.raw.facilities.length,
+                facility: appState.raw.facility.length,
                 progress: appState.raw.progress.length,
                 hiv: appState.raw.hiv.length,
                 tb: appState.raw.tb.length
@@ -1154,4 +1159,12 @@ function restoreSavedFiles() {
 
 // --- Init ---
 
-loadAllFromGitHub();
+(async function init() {
+    if (restoreSavedFiles()) return;
+    try {
+        await loadFromJSON(JSON_FILES, 'Loaded from local files');
+    } catch (e) {
+        console.info('Local JSON not available, trying GitHub...');
+        await loadAllFromGitHub();
+    }
+})();
