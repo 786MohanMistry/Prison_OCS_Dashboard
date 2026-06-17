@@ -328,6 +328,8 @@ function parseProgressFile(data) {
         const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray--.Total']));
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
         const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
+        const cDH_HHXR = toNum(getCol(r, ['Number of inmates found TB Symptomatic through Handheld X-ray--.Total']));
+        const cDL_HHXR = toNum(getCol(r, ['Number of symptomatic inmates tested for TB through Handheld X-ray--.Total']));
         const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
         const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
         const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
@@ -344,6 +346,8 @@ function parseProgressFile(data) {
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
+            HHXRPresumptive: cDH_HHXR,
+            HHXRTested: cDL_HHXR,
             CampsOrganized: campsProject + campsPrison,
             TotalCamp: toNum(r['Total Camp']),
             PU: calculatePU(xlToDate(r['Reporting Month(MM/YY)']) || xlToDate(r['End Date']))
@@ -361,14 +365,13 @@ function parseHIVFile(data) {
     return rows.map(r => {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
-        const artInitDate = xlToDate(getCol(r, ['Date of ART initiation']));
         return {
             PrisonOCSCode: code,
             SubmissionDate: xlToDate(getCol(r, ['Submission Date'])),
             HIVPositive: toNum(getCol(r, ['HIV Positive', 'HIV Positive (on date of test)'])),
-            OnART: artInitDate ? 1 : 0,
+            OnART: toNum(getCol(r, ['Initiated on ART1', 'Initiated on ART'])),
             HIVConfDate: xlToDate(getCol(r, ['Date of HIV confirmation test'])),
-            ARTInitDate: artInitDate
+            ARTInitDate: xlToDate(getCol(r, ['Date of ART initiation']))
         };
     }).filter(r => r !== null);
 }
@@ -499,15 +502,14 @@ function processDashboardData() {
 
     reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
-        const isHHXR = p.HHXRScreened > 0;
         reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
         reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
         reportedTBScreenedByCode[code] = (reportedTBScreenedByCode[code] || 0) + p.ScreenedTB;
         reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
         reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
-        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (isHHXR ? p.TBPresumptive : 0);
-        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (isHHXR ? p.TestedTB : 0);
+        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
+        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
         reportedCampByCode[code] = (reportedCampByCode[code] || 0) + p.TotalCamp;
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
     });
@@ -778,15 +780,14 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
 
     reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
-        const isHHXR = p.HHXRScreened > 0;
         reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
         reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
         reportedTBScreenedByCode[code] = (reportedTBScreenedByCode[code] || 0) + p.ScreenedTB;
         reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
         reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
-        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (isHHXR ? p.TBPresumptive : 0);
-        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (isHHXR ? p.TestedTB : 0);
+        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
+        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
         reportedCampByCode[code] = (reportedCampByCode[code] || 0) + p.TotalCamp;
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
     });
@@ -1043,6 +1044,8 @@ function updateFacilityProgressTab() {
         list = appState.data.Module3;
     }
 
+    appState.facilityTable.fullList = list;
+
     const q = appState.facilityTable.searchQuery.toLowerCase().trim();
     if (q !== '') list = list.filter(row => row.Name.toLowerCase().includes(q) || row.PrisonOCSCode.toLowerCase().includes(q));
 
@@ -1052,7 +1055,6 @@ function updateFacilityProgressTab() {
         let valA = a[sortBy], valB = b[sortBy];
         return (typeof valA === 'string' ? valA.localeCompare(valB) : valA - valB) * order;
     });
-
     const totalCount = list.length;
     const pageSize = appState.facilityTable.pageSize;
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -1065,7 +1067,7 @@ function updateFacilityProgressTab() {
     const body = document.getElementById('progressFacilityBody');
     body.innerHTML = '';
     if (paginatedList.length === 0) {
-        body.innerHTML = `<tr><td colspan="30" style="text-align:center; padding: 40px; color:var(--text-muted);">No matching facility records found.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="29" style="text-align:center; padding: 40px; color:var(--text-muted);">No matching facility records found.</td></tr>`;
         document.getElementById('paginationInfo').innerText = 'Showing 0-0 of 0 facilities';
         document.getElementById('prevPageBtn').disabled = true; document.getElementById('nextPageBtn').disabled = true;
         return;
@@ -1073,7 +1075,7 @@ function updateFacilityProgressTab() {
 
     paginatedList.forEach(row => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><code class="badge badge-primary">${row.PrisonOCSCode}</code></td><td style="font-weight:600; white-space:normal; min-width:200px;">${row.Name}</td><td>${row.Type}</td><td>${row.WeeksReported}</td><td>${formatNum(row.TotalCamp)}</td><td>${formatNum(row.CampsOrganized)}</td><td>${formatNum(row.Target)}</td><td>${formatNum(row.TestedHIV)}</td><td>${formatNum(row.PctAchieved, true, 1)}</td><td>${formatNum(row.HIVPositive)}</td><td>${formatNum(row.OnART)}</td><td>${formatNum(row.PctOnART, true, 0)}</td><td>${formatNum(row.ScreenedTB)}</td><td>${formatNum(row.TBPresumptive)}</td><td>${formatNum(row.PctPresumptive, true, 1)}</td><td>${formatNum(row.TestedTB)}</td><td>${formatNum(row.PctTested, true, 1)}</td><td>${formatNum(row.DiagnosedTB)}</td><td>${formatNum(row.PctTBPositivity, true, 1)}</td><td>${formatNum(row.OnATT)}</td><td>${formatNum(row.PctOnATT, true, 1)}</td><td>${formatNum(row.HHXRScreened)}</td><td>${formatNum(row.HHXRPresumptive)}</td><td>${formatNum(row.PctHHXRPresumptive, true, 1)}</td><td>${formatNum(row.HHXRTested)}</td><td>${formatNum(row.PctHHXRTested, true, 1)}</td><td>${formatNum(row.HHXRDiagnosed)}</td><td>${formatNum(row.PctHHXRPositive, true, 1)}</td><td>${formatNum(row.HHXROnATT)}</td><td>${formatNum(row.PctHHXROnATT, true, 1)}</td>`;
+        tr.innerHTML = `<td><code class="badge badge-primary">${row.PrisonOCSCode}</code></td><td style="font-weight:600; white-space:normal; min-width:200px;">${row.Name}</td><td>${row.Type}</td><td>${row.WeeksReported}</td><td>${formatNum(row.CampsOrganized)}</td><td>${formatNum(row.Target)}</td><td>${formatNum(row.TestedHIV)}</td><td>${formatNum(row.PctAchieved, true, 1)}</td><td>${formatNum(row.HIVPositive)}</td><td>${formatNum(row.OnART)}</td><td>${formatNum(row.PctOnART, true, 0)}</td><td>${formatNum(row.ScreenedTB)}</td><td>${formatNum(row.TBPresumptive)}</td><td>${formatNum(row.PctPresumptive, true, 1)}</td><td>${formatNum(row.TestedTB)}</td><td>${formatNum(row.PctTested, true, 1)}</td><td>${formatNum(row.DiagnosedTB)}</td><td>${formatNum(row.PctTBPositivity, true, 1)}</td><td>${formatNum(row.OnATT)}</td><td>${formatNum(row.PctOnATT, true, 1)}</td><td>${formatNum(row.HHXRScreened)}</td><td>${formatNum(row.HHXRPresumptive)}</td><td>${formatNum(row.PctHHXRPresumptive, true, 1)}</td><td>${formatNum(row.HHXRTested)}</td><td>${formatNum(row.PctHHXRTested, true, 1)}</td><td>${formatNum(row.HHXRDiagnosed)}</td><td>${formatNum(row.PctHHXRPositive, true, 1)}</td><td>${formatNum(row.HHXROnATT)}</td><td>${formatNum(row.PctHHXROnATT, true, 1)}</td>`;
         body.appendChild(tr);
     });
 
@@ -1132,7 +1134,7 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
         alert('No data available to export.');
         return;
     }
-    const data = appState.data.Module3;
+    const data = appState.facilityTable.fullList || appState.data.Module3;
     if (data.length === 0) { alert('No records found to export.'); return; }
     const headers = Object.keys(data[0]);
     const csvRows = [];
