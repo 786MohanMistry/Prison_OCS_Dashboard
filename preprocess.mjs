@@ -91,11 +91,14 @@ for (const { file, sheet, out } of FILES) {
       const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
       const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
       const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
+      const campsProject = toNum(getCol(r, ['No. of camps organized by the project']));
+      const campsPrison = toNum(getCol(r, ['No. of camps organized by the prison']));
       return {
         PrisonOCSCode: code,
         StartDate: xlToDate(r['Start Date']),
         EndDate: xlToDate(r['End Date']),
         ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
+        ReportedStatus: ('' + getCol(r, ['Counselling/Testing/Linkage Happened']) || '').trim(),
         TestedHIV: testedCamp + testedFICTC + testedSAICTC,
         ScreenedTB: c10S + cDD + c4S,
         TBPresumptive: cDH,
@@ -103,7 +106,7 @@ for (const { file, sheet, out } of FILES) {
         HHXRScreened: cDD,
         HHXRPresumptive: cDH_HHXR,
         HHXRTested: cDL_HHXR,
-        TotalCamp: toNum(r['Total Camp'])
+        CampsOrganized: campsProject + campsPrison
       };
     }).filter(r => r !== null);
   } else if (file.startsWith('2_HIV')) {
