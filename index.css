@@ -502,6 +502,132 @@ body {
     border-color: #94a3b8;
 }
 
+/* HIV-TB Progress section - white table with clean styling */
+#progressSection .glass-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+
+#progressSection .card-title {
+    color: #1e293b;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+#progressSection .table-container {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+#progressSection .data-table th {
+    background: #f8fafc;
+    color: #1e293b;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 700;
+}
+
+#progressSection .data-table td {
+    color: #334155;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 500;
+}
+
+#progressSection .data-table tbody tr:hover {
+    background: #eff6ff;
+}
+
+#progressSection .data-table tbody tr:nth-child(even) {
+    background: #f8fafc;
+}
+
+#progressSection .data-table tbody tr:nth-child(even):hover {
+    background: #eff6ff;
+}
+
+#progressSection .data-table tr.total-row {
+    background: #e0f2fe !important;
+    border-top: 2px solid #0284c7;
+    border-bottom: 2px solid #0284c7;
+}
+
+#progressSection .data-table tr.total-row td {
+    color: #0369a1;
+    font-weight: 700;
+}
+
+#progressSection .badge-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+#progressSection .badge-warning { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+#progressSection .badge-danger { background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; }
+#progressSection .badge-primary { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+#progressSection .filter-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+#progressSection .filter-control {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+}
+
+#progressSection .filter-control:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+#progressSection .filter-group label {
+    color: #64748b;
+}
+
+#progressSection .search-input {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+}
+
+#progressSection .search-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+#progressSection .search-input::placeholder {
+    color: #94a3b8;
+}
+
+#progressSection .pagination-info {
+    color: #475569;
+}
+
+#progressSection .table-footer {
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+#progressSection .btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+}
+
+#progressSection .btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+#progressSection .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+#progressSection .btn-primary:hover:not(:disabled) {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
 /* Badges / Highlights */
 .badge {
     padding: 4px 8px;

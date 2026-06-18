@@ -86,13 +86,15 @@ for (const { file, sheet, out } of FILES) {
       const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
       const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
       const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
-      const cDH_HHXR = toNum(getCol(r, ['Number of inmates found TB Symptomatic through Handheld X-ray--.Total']));
-      const cDL_HHXR = toNum(getCol(r, ['Number of symptomatic inmates tested for TB through Handheld X-ray--.Total']));
       const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
       const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
       const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
       const campsProject = toNum(getCol(r, ['No. of camps organized by the project']));
       const campsPrison = toNum(getCol(r, ['No. of camps organized by the prison']));
+      const stiScreened = toNum(getCol(r, ['Number of inmates diagnosed with STI (SCM) during the reporting month--.Total']));
+      const syphilisTested = toNum(getCol(r, ['Number of inmates tested for Syphilis during the reporting month--.Total']));
+      const hbvTested = toNum(getCol(r, ['Number of inmates tested for HBV during the reporting month--.Total']));
+      const hcvTested = toNum(getCol(r, ['Number of inmates tested for HCV during the reporting month--.Total']));
       return {
         PrisonOCSCode: code,
         StartDate: xlToDate(r['Start Date']),
@@ -104,9 +106,13 @@ for (const { file, sheet, out } of FILES) {
         TBPresumptive: cDH,
         TestedTB: cDL,
         HHXRScreened: cDD,
-        HHXRPresumptive: cDH_HHXR,
-        HHXRTested: cDL_HHXR,
-        CampsOrganized: campsProject + campsPrison
+        HHXRPresumptive: cDH,
+        HHXRTested: cDL,
+        CampsOrganized: campsProject + campsPrison,
+        STIScreened: stiScreened,
+        SyphilisTested: syphilisTested,
+        HBVTested: hbvTested,
+        HCVTested: hcvTested
       };
     }).filter(r => r !== null);
   } else if (file.startsWith('2_HIV')) {

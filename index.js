@@ -17,7 +17,7 @@ let appState = {
         pageSize: 15,
         sortBy: 'PrisonOCSCode',
         sortOrder: 'asc',
-        searchQuery: ''
+        pcFilter: 'All'
     },
     filesLoaded: { facility: false, progress: false, hiv: false, tb: false }
 };
@@ -110,7 +110,7 @@ async function loadAllFromGitHub() {
 
 Chart.register(ChartDataLabels);
 
-let charts = { prisonPie: null, ocsPie: null, hivTrend: null, tbTrend: null };
+let charts = { prisonPie: null, ocsPie: null, hivTrend: null, tbTrend: null, stiTrend: null, syphilisTrend: null, hbvTrend: null, hcvTrend: null };
 
 const dlConfig = {
     color: '#e2e8f0',
@@ -329,13 +329,15 @@ function parseProgressFile(data) {
         const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray--.Total']));
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
         const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
-        const cDH_HHXR = toNum(getCol(r, ['Number of inmates found TB Symptomatic through Handheld X-ray--.Total']));
-        const cDL_HHXR = toNum(getCol(r, ['Number of symptomatic inmates tested for TB through Handheld X-ray--.Total']));
         const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
         const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
         const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
         const campsProject = toNum(getCol(r, ['No. of camps organized by the project']));
         const campsPrison = toNum(getCol(r, ['No. of camps organized by the prison']));
+        const stiScreened = toNum(getCol(r, ['Number of inmates diagnosed with STI (SCM) during the reporting month--.Total']));
+        const syphilisTested = toNum(getCol(r, ['Number of inmates tested for Syphilis during the reporting month--.Total']));
+        const hbvTested = toNum(getCol(r, ['Number of inmates tested for HBV during the reporting month--.Total']));
+        const hcvTested = toNum(getCol(r, ['Number of inmates tested for HCV during the reporting month--.Total']));
         return {
             PrisonOCSCode: code,
             StartDate: xlToDate(r['Start Date']),
@@ -347,9 +349,13 @@ function parseProgressFile(data) {
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
-            HHXRPresumptive: cDH_HHXR,
-            HHXRTested: cDL_HHXR,
+            HHXRPresumptive: cDH,
+            HHXRTested: cDL,
             CampsOrganized: campsProject + campsPrison,
+            STIScreened: stiScreened,
+            SyphilisTested: syphilisTested,
+            HBVTested: hbvTested,
+            HCVTested: hcvTested,
             PU: calculatePU(xlToDate(r['Reporting Month(MM/YY)']) || xlToDate(r['End Date']))
         };
     }).filter(r => r !== null);
@@ -498,6 +504,10 @@ function processDashboardData() {
     const reportedHHXRPresByCode = {};
     const reportedHHXRTestedByCode = {};
     const reportedCampsByCode = {};
+    const reportedSTIByCode = {};
+    const reportedSyphilisByCode = {};
+    const reportedHBVByCode = {};
+    const reportedHCVByCode = {};
 
     reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
@@ -507,9 +517,15 @@ function processDashboardData() {
         reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
         reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
-        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
-        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
+        if ((p.HHXRScreened || 0) > 0) {
+            reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.TBPresumptive || 0);
+            reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.TestedTB || 0);
+        }
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
+        reportedSTIByCode[code] = (reportedSTIByCode[code] || 0) + (p.STIScreened || 0);
+        reportedSyphilisByCode[code] = (reportedSyphilisByCode[code] || 0) + (p.SyphilisTested || 0);
+        reportedHBVByCode[code] = (reportedHBVByCode[code] || 0) + (p.HBVTested || 0);
+        reportedHCVByCode[code] = (reportedHCVByCode[code] || 0) + (p.HCVTested || 0);
     });
 
     const reportedHIVPosByCode = {};
@@ -564,6 +580,10 @@ function processDashboardData() {
 
     const trendHIV = {};
     const trendTB = {};
+    const trendSTI = {};
+    const trendSyphilis = {};
+    const trendHBV = {};
+    const trendHCV = {};
     filteredProgress.forEach(p => {
         let key = 'Unknown';
         if (f.groupBy === 'PU') {
@@ -576,13 +596,21 @@ function processDashboardData() {
         }
         trendHIV[key] = (trendHIV[key] || 0) + p.TestedHIV;
         trendTB[key] = (trendTB[key] || 0) + p.ScreenedTB;
+        trendSTI[key] = (trendSTI[key] || 0) + (p.STIScreened || 0);
+        trendSyphilis[key] = (trendSyphilis[key] || 0) + (p.SyphilisTested || 0);
+        trendHBV[key] = (trendHBV[key] || 0) + (p.HBVTested || 0);
+        trendHCV[key] = (trendHCV[key] || 0) + (p.HCVTested || 0);
     });
 
     const sortedKeys = Object.keys(trendHIV).sort();
     const trendsData = {
         labels: sortedKeys,
         HIVValues: sortedKeys.map(k => trendHIV[k]),
-        TBValues: sortedKeys.map(k => trendTB[k])
+        TBValues: sortedKeys.map(k => trendTB[k]),
+        STIValues: sortedKeys.map(k => trendSTI[k]),
+        SyphilisValues: sortedKeys.map(k => trendSyphilis[k]),
+        HBVValues: sortedKeys.map(k => trendHBV[k]),
+        HCVValues: sortedKeys.map(k => trendHCV[k])
     };
 
     const prisonTypes = ["Central Jail", "District Jail", "Sub Jail", "Special Jail", "Open Jail", "Women Jail", "Borstal Jail", "Other Jail", "Juvenile Home", "Observation Home", "Special Home", "Place of Safety", "Others"];
@@ -772,6 +800,10 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     const reportedHHXRPresByCode = {};
     const reportedHHXRTestedByCode = {};
     const reportedCampsByCode = {};
+    const reportedSTIByCode = {};
+    const reportedSyphilisByCode = {};
+    const reportedHBVByCode = {};
+    const reportedHCVByCode = {};
 
     reportedProgress.forEach(p => {
         const code = p.PrisonOCSCode;
@@ -781,9 +813,15 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
         reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
         reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
-        reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
-        reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
+        if ((p.HHXRScreened || 0) > 0) {
+            reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.TBPresumptive || 0);
+            reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.TestedTB || 0);
+        }
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
+        reportedSTIByCode[code] = (reportedSTIByCode[code] || 0) + (p.STIScreened || 0);
+        reportedSyphilisByCode[code] = (reportedSyphilisByCode[code] || 0) + (p.SyphilisTested || 0);
+        reportedHBVByCode[code] = (reportedHBVByCode[code] || 0) + (p.HBVTested || 0);
+        reportedHCVByCode[code] = (reportedHCVByCode[code] || 0) + (p.HCVTested || 0);
     });
 
     const reportedHIVPosByCode = {};
@@ -972,9 +1010,17 @@ function renderOCSPieChart(pieData) {
 function renderTrendsCharts(trends) {
     if (charts.hivTrend) charts.hivTrend.destroy();
     if (charts.tbTrend) charts.tbTrend.destroy();
+    if (charts.stiTrend) charts.stiTrend.destroy();
+    if (charts.syphilisTrend) charts.syphilisTrend.destroy();
+    if (charts.hbvTrend) charts.hbvTrend.destroy();
+    if (charts.hcvTrend) charts.hcvTrend.destroy();
     if (!trends || !trends.labels.length) return;
     const ctxHIV = document.getElementById('hivTrendChart').getContext('2d');
     const ctxTB = document.getElementById('tbTrendChart').getContext('2d');
+    const ctxSTI = document.getElementById('stiTrendChart').getContext('2d');
+    const ctxSyphilis = document.getElementById('syphilisTrendChart').getContext('2d');
+    const ctxHBV = document.getElementById('hbvTrendChart').getContext('2d');
+    const ctxHCV = document.getElementById('hcvTrendChart').getContext('2d');
     const config = { font: { family: 'Outfit' } };
 
     charts.hivTrend = new Chart(ctxHIV, {
@@ -986,6 +1032,30 @@ function renderTrendsCharts(trends) {
     charts.tbTrend = new Chart(ctxTB, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'TB Screening Cases', data: trends.TBValues, backgroundColor: '#f59e0b', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+
+    charts.stiTrend = new Chart(ctxSTI, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'STI Screening Cases', data: trends.STIValues, backgroundColor: '#a78bfa', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+
+    charts.syphilisTrend = new Chart(ctxSyphilis, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'Syphilis Testing Cases', data: trends.SyphilisValues, backgroundColor: '#fb923c', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+
+    charts.hbvTrend = new Chart(ctxHBV, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'HBV Testing Cases', data: trends.HBVValues, backgroundColor: '#4ade80', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+    });
+
+    charts.hcvTrend = new Chart(ctxHCV, {
+        type: 'bar',
+        data: { labels: trends.labels, datasets: [{ label: 'HCV Testing Cases', data: trends.HCVValues, backgroundColor: '#f472b6', borderRadius: 6 }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
     });
 }
@@ -1039,8 +1109,19 @@ function updateFacilityProgressTab() {
 
     appState.facilityTable.fullList = list;
 
-    const q = appState.facilityTable.searchQuery.toLowerCase().trim();
-    if (q !== '') list = list.filter(row => row.Name.toLowerCase().includes(q) || row.PrisonOCSCode.toLowerCase().includes(q));
+    const pcSelect = document.getElementById('filterPC');
+    const curPC = pcSelect.value;
+    const allPCs = [...new Set(list.map(r => r.PrisonOCSCode).filter(Boolean))].sort();
+    pcSelect.innerHTML = '<option value="All">All PCs</option>';
+    allPCs.forEach(pc => {
+        const opt = document.createElement('option');
+        opt.value = pc; opt.innerText = pc; pcSelect.appendChild(opt);
+    });
+    if (allPCs.includes(curPC)) pcSelect.value = curPC;
+    else { pcSelect.value = 'All'; appState.facilityTable.pcFilter = 'All'; }
+
+    const pc = appState.facilityTable.pcFilter;
+    if (pc !== 'All') list = list.filter(row => row.PrisonOCSCode === pc);
 
     const sortBy = appState.facilityTable.sortBy;
     const order = appState.facilityTable.sortOrder === 'asc' ? 1 : -1;
@@ -1161,8 +1242,8 @@ document.getElementById('nextPageBtn').addEventListener('click', () => {
     appState.facilityTable.currentPage++;
     updateFacilityProgressTab();
 });
-document.getElementById('searchTableInput').addEventListener('input', (e) => {
-    appState.facilityTable.searchQuery = e.target.value;
+document.getElementById('filterPC').addEventListener('change', (e) => {
+    appState.facilityTable.pcFilter = e.target.value;
     appState.facilityTable.currentPage = 1;
     updateFacilityProgressTab();
 });
