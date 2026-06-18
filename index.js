@@ -1127,6 +1127,26 @@ function updateFacilityProgressTab() {
     const pc = appState.facilityTable.pcFilter;
     if (pc !== 'All') list = list.filter(row => row.PrisonOCSCode === pc);
 
+    const totalsRow = list.reduce((acc, row) => {
+        acc.WeeksReported += row.WeeksReported || 0;
+        acc.CampsOrganized += row.CampsOrganized || 0;
+        acc.Target += row.Target || 0;
+        acc.TestedHIV += row.TestedHIV || 0;
+        acc.HIVPositive += row.HIVPositive || 0;
+        acc.OnART += row.OnART || 0;
+        acc.ScreenedTB += row.ScreenedTB || 0;
+        acc.TBPresumptive += row.TBPresumptive || 0;
+        acc.TestedTB += row.TestedTB || 0;
+        acc.DiagnosedTB += row.DiagnosedTB || 0;
+        acc.OnATT += row.OnATT || 0;
+        acc.HHXRScreened += row.HHXRScreened || 0;
+        acc.HHXRPresumptive += row.HHXRPresumptive || 0;
+        acc.HHXRTested += row.HHXRTested || 0;
+        acc.HHXRDiagnosed += row.HHXRDiagnosed || 0;
+        acc.HHXROnATT += row.HHXROnATT || 0;
+        return acc;
+    }, { WeeksReported:0, CampsOrganized:0, Target:0, TestedHIV:0, HIVPositive:0, OnART:0, ScreenedTB:0, TBPresumptive:0, TestedTB:0, DiagnosedTB:0, OnATT:0, HHXRScreened:0, HHXRPresumptive:0, HHXRTested:0, HHXRDiagnosed:0, HHXROnATT:0 });
+
     const sortBy = appState.facilityTable.sortBy;
     const order = appState.facilityTable.sortOrder === 'asc' ? 1 : -1;
     list.sort((a, b) => {
@@ -1135,6 +1155,18 @@ function updateFacilityProgressTab() {
     });
     const totalCount = list.length;
     const pageSize = appState.facilityTable.pageSize;
+
+    // Update sort indicators in header
+    document.querySelectorAll('#progressFacilityTable thead th[data-sort]').forEach(th => {
+        const field = th.getAttribute('data-sort');
+        const label = th.getAttribute('data-label') || th.innerText.replace(/ [▲▼]$/, '');
+        if (!th.getAttribute('data-label')) th.setAttribute('data-label', label);
+        if (field === sortBy) {
+            th.innerHTML = label + (appState.facilityTable.sortOrder === 'asc' ? ' ▲' : ' ▼');
+        } else {
+            th.innerHTML = label;
+        }
+    });
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
     if (appState.facilityTable.currentPage > totalPages) appState.facilityTable.currentPage = totalPages;
 
@@ -1144,12 +1176,25 @@ function updateFacilityProgressTab() {
 
     const body = document.getElementById('progressFacilityBody');
     body.innerHTML = '';
+
     if (paginatedList.length === 0) {
         body.innerHTML = `<tr><td colspan="29" style="text-align:center; padding: 40px; color:var(--text-muted);">No matching facility records found.</td></tr>`;
         document.getElementById('paginationInfo').innerText = 'Showing 0-0 of 0 facilities';
         document.getElementById('prevPageBtn').disabled = true; document.getElementById('nextPageBtn').disabled = true;
         return;
     }
+
+    const t = totalsRow;
+    const totalTr = document.createElement('tr');
+    totalTr.className = 'total-row';
+    totalTr.innerHTML = `<td style="position:sticky; left:0; z-index:9; background:rgba(30, 41, 59, 0.9); font-weight:700;">Total</td>
+        <td style="font-weight:700;">—</td><td>—</td><td>${t.WeeksReported}</td><td>${formatNum(t.CampsOrganized)}</td><td>${formatNum(t.Target)}</td>
+        <td>${formatNum(t.TestedHIV)}</td><td>${formatNum(t.Target>0?t.TestedHIV/t.Target*100:0, true, 1)}</td><td>${formatNum(t.HIVPositive)}</td><td>${formatNum(t.OnART)}</td><td>${formatNum(t.HIVPositive>0?t.OnART/t.HIVPositive*100:0, true, 0)}</td>
+        <td>${formatNum(t.ScreenedTB)}</td><td>${formatNum(t.TBPresumptive)}</td><td>${formatNum(t.ScreenedTB>0?t.TBPresumptive/t.ScreenedTB*100:0, true, 1)}</td><td>${formatNum(t.TestedTB)}</td><td>${formatNum(t.TBPresumptive>0?t.TestedTB/t.TBPresumptive*100:0, true, 1)}</td>
+        <td>${formatNum(t.DiagnosedTB)}</td><td>${formatNum(t.TestedTB>0?t.DiagnosedTB/t.TestedTB*100:0, true, 1)}</td><td>${formatNum(t.OnATT)}</td><td>${formatNum(t.DiagnosedTB>0?t.OnATT/t.DiagnosedTB*100:0, true, 1)}</td>
+        <td>${formatNum(t.HHXRScreened)}</td><td>${formatNum(t.HHXRPresumptive)}</td><td>${formatNum(t.HHXRScreened>0?t.HHXRPresumptive/t.HHXRScreened*100:0, true, 1)}</td><td>${formatNum(t.HHXRTested)}</td><td>${formatNum(t.HHXRPresumptive>0?t.HHXRTested/t.HHXRPresumptive*100:0, true, 1)}</td>
+        <td>${formatNum(t.HHXRDiagnosed)}</td><td>${formatNum(t.HHXRTested>0?t.HHXRDiagnosed/t.HHXRTested*100:0, true, 1)}</td><td>${formatNum(t.HHXROnATT)}</td><td>${formatNum(t.HHXRDiagnosed>0?t.HHXROnATT/t.HHXRDiagnosed*100:0, true, 1)}</td>`;
+    body.appendChild(totalTr);
 
     paginatedList.forEach(row => {
         const tr = document.createElement('tr');
@@ -1252,6 +1297,20 @@ document.getElementById('filterPC').addEventListener('change', (e) => {
     updateFacilityProgressTab();
 });
 
+document.querySelectorAll('#progressFacilityTable thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+        const sortBy = th.getAttribute('data-sort');
+        if (appState.facilityTable.sortBy === sortBy) {
+            appState.facilityTable.sortOrder = appState.facilityTable.sortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            appState.facilityTable.sortBy = sortBy;
+            appState.facilityTable.sortOrder = 'asc';
+        }
+        appState.facilityTable.currentPage = 1;
+        updateFacilityProgressTab();
+    });
+});
+
 // --- Restore from localStorage ---
 
 function restoreSavedFiles() {
@@ -1265,6 +1324,10 @@ function restoreSavedFiles() {
         appState.raw.progress.forEach(p => {
             p.PU = calculatePU(p.ReportingMonth || p.EndDate);
             if (p.CampsOrganized === undefined) p.CampsOrganized = 0;
+            if (p.STIScreened === undefined) p.STIScreened = 0;
+            if (p.SyphilisTested === undefined) p.SyphilisTested = 0;
+            if (p.HBVTested === undefined) p.HBVTested = 0;
+            if (p.HCVTested === undefined) p.HCVTested = 0;
         });
 
         const allLoaded = Object.values(appState.filesLoaded).every(v => v);

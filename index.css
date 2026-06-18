@@ -525,6 +525,13 @@ body {
     color: #1e293b;
     border-bottom: 1px solid #e2e8f0;
     font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+#progressSection .data-table th:hover {
+    background: #e2e8f0;
 }
 
 #progressSection .data-table td {
