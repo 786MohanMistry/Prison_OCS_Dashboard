@@ -107,7 +107,7 @@ body {
     align-items: center;
     gap: 16px;
     padding: 14px 16px;
-    color: var(--text-secondary);
+    color: #0f2d5c;
     text-decoration: none;
     border-radius: 12px;
     font-weight: 600;
@@ -123,7 +123,7 @@ body {
 }
 
 .sidebar-menu-item.active a {
-    color: var(--color-primary);
+    color: #0056d6;
     background: rgba(56, 189, 248, 0.08);
     border: 1px solid var(--border-glow);
     box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
