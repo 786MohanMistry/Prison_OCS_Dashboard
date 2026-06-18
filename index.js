@@ -60,6 +60,7 @@ async function loadFromJSON(jsonFiles, sourceLabel) {
     restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
     appState.raw.progress.forEach(p => {
         p.PU = calculatePU(p.ReportingMonth || p.EndDate);
+        if (p.CampsOrganized === undefined) p.CampsOrganized = 0;
     });
     renderDashboard();
     navigateToSection('overviewSection');
@@ -349,7 +350,6 @@ function parseProgressFile(data) {
             HHXRPresumptive: cDH_HHXR,
             HHXRTested: cDL_HHXR,
             CampsOrganized: campsProject + campsPrison,
-            TotalCamp: toNum(r['Total Camp']),
             PU: calculatePU(xlToDate(r['Reporting Month(MM/YY)']) || xlToDate(r['End Date']))
         };
     }).filter(r => r !== null);
@@ -497,7 +497,6 @@ function processDashboardData() {
     const reportedHHXRScreenedByCode = {};
     const reportedHHXRPresByCode = {};
     const reportedHHXRTestedByCode = {};
-    const reportedCampByCode = {};
     const reportedCampsByCode = {};
 
     reportedProgress.forEach(p => {
@@ -510,7 +509,6 @@ function processDashboardData() {
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
         reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
         reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
-        reportedCampByCode[code] = (reportedCampByCode[code] || 0) + p.TotalCamp;
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
     });
 
@@ -667,7 +665,6 @@ function processDashboardData() {
     facilities.forEach(f => {
         const code = f.PrisonOCSCode;
         const weeks = reportsCountByCode[code] || 0;
-        const camps = reportedCampByCode[code] || 0;
         const campsOrg = reportedCampsByCode[code] || 0;
         const hivTested = reportedHIVByCode[code] || 0;
         const hivPos = reportedHIVPosByCode[code] || 0;
@@ -689,7 +686,6 @@ function processDashboardData() {
             Name: f.Name,
             Type: f.Type,
             WeeksReported: weeks,
-            TotalCamp: camps,
             CampsOrganized: campsOrg,
             Target: facAdjustedTarget,
             TestedHIV: hivTested,
@@ -775,7 +771,6 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     const reportedHHXRScreenedByCode = {};
     const reportedHHXRPresByCode = {};
     const reportedHHXRTestedByCode = {};
-    const reportedCampByCode = {};
     const reportedCampsByCode = {};
 
     reportedProgress.forEach(p => {
@@ -788,7 +783,6 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
         reportedHHXRScreenedByCode[code] = (reportedHHXRScreenedByCode[code] || 0) + p.HHXRScreened;
         reportedHHXRPresByCode[code] = (reportedHHXRPresByCode[code] || 0) + (p.HHXRPresumptive || 0);
         reportedHHXRTestedByCode[code] = (reportedHHXRTestedByCode[code] || 0) + (p.HHXRTested || 0);
-        reportedCampByCode[code] = (reportedCampByCode[code] || 0) + p.TotalCamp;
         reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
     });
 
@@ -839,7 +833,6 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     facilities.forEach(f => {
         const code = f.PrisonOCSCode;
         const weeks = reportsCountByCode[code] || 0;
-        const camps = reportedCampByCode[code] || 0;
         const campsOrg = reportedCampsByCode[code] || 0;
         const hivTested = reportedHIVByCode[code] || 0;
         const hivPos = reportedHIVPosByCode[code] || 0;
@@ -858,7 +851,7 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
 
         rows.push({
             PrisonOCSCode: code, Name: f.Name, Type: f.Type,
-            WeeksReported: weeks, TotalCamp: camps, CampsOrganized: campsOrg, Target: facTarget,
+            WeeksReported: weeks, CampsOrganized: campsOrg, Target: facTarget,
             TestedHIV: hivTested, PctAchieved: facTarget > 0 ? (hivTested / facTarget) * 100 : 0,
             HIVPositive: hivPos, OnART: onArt, PctOnART: hivPos > 0 ? (onArt / hivPos) * 100 : 0,
             ScreenedTB: tbScreened, TBPresumptive: tbPres, PctPresumptive: tbScreened > 0 ? (tbPres / tbScreened) * 100 : 0,
@@ -1186,6 +1179,7 @@ function restoreSavedFiles() {
         restoreDatesInPlace(appState.raw.tb, DATE_FIELDS_TB);
         appState.raw.progress.forEach(p => {
             p.PU = calculatePU(p.ReportingMonth || p.EndDate);
+            if (p.CampsOrganized === undefined) p.CampsOrganized = 0;
         });
 
         const allLoaded = Object.values(appState.filesLoaded).every(v => v);
