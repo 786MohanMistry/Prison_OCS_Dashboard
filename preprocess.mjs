@@ -82,15 +82,15 @@ for (const { file, sheet, out } of FILES) {
       const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
       if (!code) return null;
       const c10S = toNum(getCol(r, ['Number of inmates screened for TB through 10S--.Total']));
-      const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray--.Total']));
+      const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray-- .Total', 'Number of inmates screened for TB through Handheld X-ray--.Total']));
       const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
       const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
       const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
       const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
       const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
       const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
-      const campsProject = toNum(getCol(r, ['No. of camps organized by the project']));
-      const campsPrison = toNum(getCol(r, ['No. of camps organized by the prison']));
+      const campsProject = toNum(getCol(r, ['No. of camp organized by the project', 'No. of camps organized by the project', 'No. of camp organised by the project']));
+      const campsPrison = toNum(getCol(r, ['No. of camp organised by the prison', 'No. of camp organized by the prison', 'No. of camps organized by the prison', 'No. of camps organised by the prison']));
       const stiScreened = toNum(getCol(r, ['Number of inmates diagnosed with STI (SCM) during the reporting month--.Total']));
       const syphilisTested = toNum(getCol(r, ['Number of inmates tested for Syphilis during the reporting month--.Total']));
       const hbvTested = toNum(getCol(r, ['Number of inmates tested for HBV during the reporting month--.Total']));
