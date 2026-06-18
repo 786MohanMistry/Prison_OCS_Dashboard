@@ -61,6 +61,10 @@ async function loadFromJSON(jsonFiles, sourceLabel) {
     appState.raw.progress.forEach(p => {
         p.PU = calculatePU(p.ReportingMonth || p.EndDate);
         if (p.CampsOrganized === undefined) p.CampsOrganized = 0;
+        if (p.STIScreened === undefined) p.STIScreened = 0;
+        if (p.SyphilisTested === undefined) p.SyphilisTested = 0;
+        if (p.HBVTested === undefined) p.HBVTested = 0;
+        if (p.HCVTested === undefined) p.HCVTested = 0;
     });
     renderDashboard();
     navigateToSection('overviewSection');
