@@ -59,8 +59,14 @@ body {
 /* Sidebar Styles */
 .sidebar {
     width: 260px;
-    background: var(--bg-sidebar);
-    backdrop-filter: blur(20px);
+    background: linear-gradient(
+        135deg,
+        #eef8ff 0%,
+        #cce7ff 25%,
+        #8fc8ff 50%,
+        #4d8fff 75%,
+        #2d3fd6 100%
+    );
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -832,6 +838,119 @@ body {
     font-weight: 600;
     font-size: 16px;
     color: var(--text-primary);
+}
+
+/* ==========================================
+   PREMIUM DASHBOARD THEME OVERRIDES
+   ========================================== */
+
+body,
+.dashboard-container,
+.main-content {
+    background: linear-gradient(
+        135deg,
+        #020817 0%,
+        #071126 35%,
+        #0b1730 70%,
+        #10204a 100%
+    );
+    color: #f8fafc;
+}
+
+.metric-card,
+.stat-card,
+.card {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #1e293b;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.filters-container,
+.filter-panel {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #1e293b;
+    border-radius: 20px;
+}
+
+select,
+.filter-select {
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 12px;
+}
+
+button,
+.apply-btn {
+    background: linear-gradient(
+        135deg,
+        #38bdf8,
+        #3b82f6
+    );
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+h1,
+h2,
+h3,
+.page-title {
+    color: #ffffff;
+}
+
+.subtitle,
+.page-subtitle {
+    color: #94a3b8;
+}
+
+.hiv-card .value,
+.hiv-value {
+    color: #38bdf8;
+}
+
+.positive-card .value,
+.positive-value {
+    color: #10b981;
+}
+
+.tb-card .value,
+.tb-value {
+    color: #3b82f6;
+}
+
+.tb-diagnosed .value,
+.tb-diagnosed-value {
+    color: #f59e0b;
+}
+
+.chart-card,
+.chart-container {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #1e293b;
+    border-radius: 20px;
+}
+
+table {
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+th {
+    background: #172554;
+    color: #cbd5e1;
+}
+
+td {
+    border-color: #1e293b;
+}
+
+.card:hover,
+.chart-card:hover {
+    border-color: #3b82f6;
+    transition: all 0.3s ease;
 }
 
 
