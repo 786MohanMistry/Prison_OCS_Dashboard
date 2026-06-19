@@ -340,7 +340,7 @@ function countUniqueMonths(progressData) {
 }
 
 function parseProgressFile(data) {
-    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const wb = XLSX.read(data, { type: 'array', cellDates: false });
     const ws = wb.Sheets['Prison-OCS Progress'] || wb.Sheets[wb.SheetNames[0]];
     const rows = sheetToArray(ws);
     if (rows.length > 0) {

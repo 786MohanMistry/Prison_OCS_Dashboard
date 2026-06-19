@@ -60,7 +60,7 @@ function getCol(obj, names) {
 
 for (const { file, sheet, out } of FILES) {
   console.log(`Reading ${file}...`);
-  const wb = XLSX.readFile(file, { cellDates: true });
+  const wb = XLSX.readFile(file, { cellDates: false });
   const ws = wb.Sheets[sheet] || wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
 
