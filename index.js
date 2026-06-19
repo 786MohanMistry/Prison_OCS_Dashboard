@@ -330,6 +330,7 @@ function parseProgressFile(data) {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
         const createdByUser = ('' + getCol(r, ['Created By User']) || '').trim();
+        const c10S = toNum(getCol(r, ['Number of inmates screened for TB through 10S--.Total']));
         const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
         const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray-- .Total', 'Number of inmates screened for TB through Handheld X-ray--.Total']));
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
@@ -351,7 +352,7 @@ function parseProgressFile(data) {
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
             ReportedStatus: ('' + getCol(r, ['Counselling/Testing/Linkage Happened']) || '').trim(),
             TestedHIV: testedCamp + testedFICTC + testedSAICTC,
-            ScreenedTB: c4S,
+            ScreenedTB: c10S + cDD + c4S,
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
