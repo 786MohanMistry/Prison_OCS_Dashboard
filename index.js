@@ -176,10 +176,12 @@ document.querySelectorAll('.sidebar-menu-item').forEach(item => {
 // --- LocalStorage Persistence (synchronous, reliable) ---
 
 const STORAGE_KEY = 'subhiksha_dashboard_v2';
+const STORAGE_VERSION = 2;
 
 function saveRawToStorage() {
     try {
         const payload = {
+            version: STORAGE_VERSION,
             data: appState.raw,
             filesLoaded: appState.filesLoaded,
             savedAt: new Date().toISOString()
@@ -197,6 +199,11 @@ function loadRawFromStorage() {
         if (!raw) return null;
         const payload = JSON.parse(raw);
         if (!payload || !payload.data) return null;
+        if (payload.version !== STORAGE_VERSION) {
+            console.warn('localStorage version mismatch (got ' + payload.version + ', expected ' + STORAGE_VERSION + '), discarding');
+            localStorage.removeItem(STORAGE_KEY);
+            return null;
+        }
         return payload;
     } catch (e) {
         console.warn('localStorage load failed:', e);
