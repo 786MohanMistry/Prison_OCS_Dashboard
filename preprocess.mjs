@@ -86,6 +86,7 @@ for (const { file, sheet, out } of FILES) {
       const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
       const cDL = toNum(getCol(r, ['Number of symptomatic inmates tested for TB testing during the reporting month--.Total']));
       const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
+      const createdByUser = ('' + getCol(r, ['Created By User']) || '').trim();
       const testedCamp = toNum(getCol(r, ['Number of inmates screened for HIV through camps--.Total']));
       const testedFICTC = toNum(getCol(r, ['Number of inmates screened/tested through prison based F-ICTCs--.Total']));
       const testedSAICTC = toNum(getCol(r, ['Number of inmates tested for HIV through prison based SA-ICTCs--.Total']));
@@ -97,6 +98,7 @@ for (const { file, sheet, out } of FILES) {
       const hcvTested = toNum(getCol(r, ['Number of inmates tested for HCV during the reporting month--.Total']));
       return {
         PrisonOCSCode: code,
+        CreatedByUser: createdByUser,
         StartDate: xlToDate(r['Start Date']),
         EndDate: xlToDate(r['End Date']),
         ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),

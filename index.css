@@ -841,115 +841,97 @@ body {
 }
 
 /* ==========================================
-   PREMIUM DASHBOARD THEME OVERRIDES
+   LIGHT DASHBOARD THEME OVERRIDES
    ========================================== */
 
 body,
 .dashboard-container,
-.main-content {
-    background: linear-gradient(
-        135deg,
-        #020817 0%,
-        #071126 35%,
-        #0b1730 70%,
-        #10204a 100%
-    );
-    color: #f8fafc;
+.main-content,
+.content-area {
+    background: linear-gradient(135deg, #F8FCFF 0%, #EEF7FF 45%, #E8F5FF 100%);
+    color: #0F172A;
 }
 
+.card,
 .metric-card,
-.stat-card,
-.card {
-    background: rgba(15, 23, 42, 0.95);
-    border: 1px solid #1e293b;
-    border-radius: 20px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+.chart-card {
+    background: #FFFFFF;
+    border: 1px solid #D6EAF8;
+    border-radius: 22px;
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
 }
 
 .filters-container,
 .filter-panel {
-    background: rgba(15, 23, 42, 0.95);
-    border: 1px solid #1e293b;
-    border-radius: 20px;
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(10px);
+    border: 1px solid #D6EAF8;
+    border-radius: 22px;
 }
 
 select,
 .filter-select {
-    background: #0f172a;
-    color: #f8fafc;
-    border: 1px solid #334155;
-    border-radius: 12px;
+    background: #FFFFFF;
+    color: #0F172A;
+    border: 1px solid #CBD5E1;
+    border-radius: 14px;
 }
 
-button,
-.apply-btn {
-    background: linear-gradient(
-        135deg,
-        #38bdf8,
-        #3b82f6
-    );
+button.apply-btn {
+    background: linear-gradient(135deg, #2563EB, #38BDF8);
     color: white;
     border: none;
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: 600;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
 }
 
 h1,
 h2,
 h3,
-.page-title {
-    color: #ffffff;
+.page-title,
+.title {
+    color: #0F172A;
 }
 
 .subtitle,
-.page-subtitle {
-    color: #94a3b8;
+.page-subtitle,
+.muted,
+p,
+span {
+    color: #475569;
 }
 
-.hiv-card .value,
-.hiv-value {
-    color: #38bdf8;
-}
-
-.positive-card .value,
-.positive-value {
-    color: #10b981;
-}
-
-.tb-card .value,
-.tb-value {
-    color: #3b82f6;
-}
-
-.tb-diagnosed .value,
-.tb-diagnosed-value {
-    color: #f59e0b;
-}
+.kpi-blue { color: #2563EB; }
+.kpi-green { color: #10B981; }
+.kpi-orange { color: #F59E0B; }
+.kpi-red { color: #EF4444; }
 
 .chart-card,
 .chart-container {
-    background: rgba(15, 23, 42, 0.95);
-    border: 1px solid #1e293b;
-    border-radius: 20px;
+    background: #FFFFFF;
+    border: 1px solid #D6EAF8;
+    border-radius: 22px;
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
 }
 
 table {
-    background: #0f172a;
-    color: #f8fafc;
+    background: #FFFFFF;
+    color: #0F172A;
 }
 
 th {
-    background: #172554;
-    color: #cbd5e1;
+    background: #F1F5F9;
+    color: #475569;
 }
 
 td {
-    border-color: #1e293b;
+    border-color: #E2E8F0;
 }
 
 .card:hover,
 .chart-card:hover {
-    border-color: #3b82f6;
+    border-color: #93C5FD;
     transition: all 0.3s ease;
 }
 

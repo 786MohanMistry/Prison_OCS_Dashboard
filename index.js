@@ -329,6 +329,7 @@ function parseProgressFile(data) {
     return rows.map(r => {
         const code = ('' + getCol(r, ['Prison/OCS - ID']) || '').trim();
         if (!code) return null;
+        const createdByUser = ('' + getCol(r, ['Created By User']) || '').trim();
         const c4S = toNum(getCol(r, ['Number of inmates screened for TB through 4S+--.Total']));
         const cDD = toNum(getCol(r, ['Number of inmates screened for TB through Handheld X-ray-- .Total', 'Number of inmates screened for TB through Handheld X-ray--.Total']));
         const cDH = toNum(getCol(r, ['Number of inmates found TB Symptomatic during the reporting month--.Total']));
@@ -344,6 +345,7 @@ function parseProgressFile(data) {
         const hcvTested = toNum(getCol(r, ['Number of inmates tested for HCV during the reporting month--.Total']));
         return {
             PrisonOCSCode: code,
+            CreatedByUser: createdByUser,
             StartDate: xlToDate(r['Start Date']),
             EndDate: xlToDate(r['End Date']),
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
@@ -715,6 +717,7 @@ function processDashboardData() {
         const facAdjustedTarget = f.Target * monthCount;
         module3Rows.push({
             PrisonOCSCode: code,
+            CreatedByUser: f.CreatedByUser,
             Name: f.Name,
             Type: f.Type,
             WeeksReported: weeks,
@@ -892,7 +895,7 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
         const facTarget = f.Target * monthCount;
 
         rows.push({
-            PrisonOCSCode: code, Name: f.Name, Type: f.Type,
+            PrisonOCSCode: code, CreatedByUser: f.CreatedByUser, Name: f.Name, Type: f.Type,
             WeeksReported: weeks, CampsOrganized: campsOrg, Target: facTarget,
             TestedHIV: hivTested, PctAchieved: facTarget > 0 ? (hivTested / facTarget) * 100 : 0,
             HIVPositive: hivPos, OnART: onArt, PctOnART: hivPos > 0 ? (onArt / hivPos) * 100 : 0,
@@ -1115,8 +1118,8 @@ function updateFacilityProgressTab() {
 
     const pcSelect = document.getElementById('filterPC');
     const curPC = pcSelect.value;
-    const allPCs = [...new Set(list.map(r => r.PrisonOCSCode).filter(Boolean))].sort();
-    pcSelect.innerHTML = '<option value="All">All PCs</option>';
+    const allPCs = [...new Set(list.map(r => r.CreatedByUser).filter(Boolean))].sort();
+    pcSelect.innerHTML = '<option value="All">All Created By</option>';
     allPCs.forEach(pc => {
         const opt = document.createElement('option');
         opt.value = pc; opt.innerText = pc; pcSelect.appendChild(opt);
@@ -1125,7 +1128,7 @@ function updateFacilityProgressTab() {
     else { pcSelect.value = 'All'; appState.facilityTable.pcFilter = 'All'; }
 
     const pc = appState.facilityTable.pcFilter;
-    if (pc !== 'All') list = list.filter(row => row.PrisonOCSCode === pc);
+    if (pc !== 'All') list = list.filter(row => row.CreatedByUser === pc);
 
     const totalsRow = list.reduce((acc, row) => {
         acc.WeeksReported += row.WeeksReported || 0;
