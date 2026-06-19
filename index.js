@@ -303,16 +303,29 @@ function parseFacilityFile(data) {
 
 function calculatePU(date) {
     if (!date) return 'Unknown';
-    const m = date.getMonth();
-    const y = date.getFullYear();
-    let startYear;
-    if (m >= 3 && m <= 8) {
-        startYear = y;
-        return 'PU' + ((startYear - 2024) * 2 + 1);
+
+    const month = date.getMonth(); // Jan=0, Feb=1, ..., Dec=11
+    const year = date.getFullYear();
+
+    // PU periods:
+    // PU1 = Apr 2024 - Sep 2024
+    // PU2 = Oct 2024 - Mar 2025
+    // PU3 = Apr 2025 - Sep 2025
+    // PU4 = Oct 2025 - Mar 2026
+    // PU5 = Apr 2026 - Sep 2026
+    // PU6 = Oct 2026 - Mar 2027
+
+    let baseYear;
+
+    // April (3) to September (8)
+    if (month >= 3 && month <= 8) {
+        baseYear = year;
+        return `PU${((baseYear - 2024) * 2) + 1}`;
     }
-    if (m >= 9) startYear = y;
-    else startYear = y - 1;
-    return 'PU' + ((startYear - 2024) * 2 + 2);
+
+    // October (9) to March (2)
+    baseYear = (month >= 9) ? year : year - 1;
+    return `PU${((baseYear - 2024) * 2) + 2}`;
 }
 
 function countUniqueMonths(progressData) {
@@ -616,7 +629,11 @@ function processDashboardData() {
         trendHCV[key] = (trendHCV[key] || 0) + (p.HCVTested || 0);
     });
 
-    const sortedKeys = Object.keys(trendHIV).sort();
+    const sortedKeys = Object.keys(trendHIV).sort((a, b) => {
+        const ma = a.match(/^PU(\d+)$/), mb = b.match(/^PU(\d+)$/);
+        if (ma && mb) return parseInt(ma[1], 10) - parseInt(mb[1], 10);
+        return a.localeCompare(b);
+    });
     const trendsData = {
         labels: sortedKeys,
         HIVValues: sortedKeys.map(k => trendHIV[k]),
@@ -773,7 +790,7 @@ function processDashboardData() {
     const allPU = [...new Set(filteredProgress.map(p => p.PU).filter(Boolean))].filter(pu => {
         const n = parseInt(pu.replace('PU', ''), 10);
         return !isNaN(n) && n >= 1;
-    }).sort();
+    }).sort((a, b) => parseInt(a.replace('PU',''), 10) - parseInt(b.replace('PU',''), 10));
     const allTypes = [...new Set(facilities.map(f => f.Type).filter(Boolean))].sort();
 
     return { states: [...new Set(allFac.map(f => f.State).filter(Boolean))].sort(), pus: allPU, types: allTypes };
