@@ -359,7 +359,7 @@ function parseProgressFile(data) {
             ReportingMonth: xlToDate(r['Reporting Month(MM/YY)']),
             ReportedStatus: ('' + getCol(r, ['Counselling/Testing/Linkage Happened']) || '').trim(),
             TestedHIV: testedCamp + testedFICTC + testedSAICTC,
-            ScreenedTB: c10S + cDD + c4S,
+            ScreenedTB: c10S,
             TBPresumptive: cDH,
             TestedTB: cDL,
             HHXRScreened: cDD,
