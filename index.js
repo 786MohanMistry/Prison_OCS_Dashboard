@@ -117,7 +117,7 @@ Chart.register(ChartDataLabels);
 let charts = { prisonPie: null, ocsPie: null, hivTrend: null, tbTrend: null, stiTrend: null, syphilisTrend: null, hbvTrend: null, hcvTrend: null };
 
 const dlConfig = {
-    color: '#e2e8f0',
+    color: '#000000',
     font: { family: 'Outfit', weight: 'bold' },
     anchor: 'end',
     align: 'end',
@@ -1024,7 +1024,7 @@ function renderPrisonPieChart(pieData) {
     charts.prisonPie = new Chart(ctx, {
         type: 'pie',
         data: { labels: pieData.labels, datasets: [{ data: pieData.values, backgroundColor: ['#0284c7', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd', '#e0f2fe', '#f0f9ff', '#0369a1'], borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e2e8f0', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#0b0f19', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#000000', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#000000', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
     });
 }
 
@@ -1035,7 +1035,7 @@ function renderOCSPieChart(pieData) {
     charts.ocsPie = new Chart(ctx, {
         type: 'pie',
         data: { labels: pieData.labels, datasets: [{ data: pieData.values, backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5', '#ecfdf5', '#047857', '#065f46'], borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e2e8f0', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#0b0f19', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#000000', font: { family: 'Outfit', size: 11 } } }, datalabels: { color: '#000000', font: { family: 'Outfit', weight: 'bold', size: 12 }, formatter: v => v.toLocaleString() } } }
     });
 }
 
@@ -1058,37 +1058,37 @@ function renderTrendsCharts(trends) {
     charts.hivTrend = new Chart(ctxHIV, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'HIV Testing Cases', data: trends.HIVValues, backgroundColor: '#38bdf8', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 
     charts.tbTrend = new Chart(ctxTB, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'TB Screening Cases', data: trends.TBValues, backgroundColor: '#f59e0b', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 
     charts.stiTrend = new Chart(ctxSTI, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'STI Screening Cases', data: trends.STIValues, backgroundColor: '#a78bfa', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 
     charts.syphilisTrend = new Chart(ctxSyphilis, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'Syphilis Testing Cases', data: trends.SyphilisValues, backgroundColor: '#fb923c', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 
     charts.hbvTrend = new Chart(ctxHBV, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'HBV Testing Cases', data: trends.HBVValues, backgroundColor: '#4ade80', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 
     charts.hcvTrend = new Chart(ctxHCV, {
         type: 'bar',
         data: { labels: trends.labels, datasets: [{ label: 'HCV Testing Cases', data: trends.HCVValues, backgroundColor: '#f472b6', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#e2e8f0', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: config } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#000000', font: config } }, datalabels: { ...dlConfig, formatter: v => v.toLocaleString() } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#000000', font: config } } } }
     });
 }
 
