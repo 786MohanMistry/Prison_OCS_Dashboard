@@ -245,7 +245,7 @@ body {
 }
 
 .filter-control {
-    background: #0d2137;
+    background: #071a33;
     border: 1px solid #1e3a5f;
     color: #ffffff;
     padding: 6px 10px;
@@ -870,7 +870,7 @@ body,
 
 .filters-container,
 .filter-panel {
-    background: #0a192f;
+    background: #0a1c3e;
     backdrop-filter: blur(10px);
     border: 1px solid #1e3a5f;
     border-radius: 22px;
@@ -878,7 +878,7 @@ body,
 
 select,
 .filter-select {
-    background: #0d2137;
+    background: #071a33;
     color: #ffffff;
     border: 1px solid #1e3a5f;
     border-radius: 14px;
