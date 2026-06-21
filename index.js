@@ -1285,7 +1285,10 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
     csvRows.push(headers.join(','));
     data.forEach(row => {
         const values = headers.map(header => {
-            const val = row[header];
+            let val = row[header];
+            if (header.startsWith('Pct') && typeof val === 'number' && !isNaN(val)) {
+                val = val.toFixed(1) + '%';
+            }
             const escaped = ('' + val).replace(/"/g, '""');
             return `"${escaped}"`;
         });
