@@ -1,5 +1,428 @@
 /* index.js - Standalone (Client-Side) Edition */
 
+// =============================================
+// FIREBASE CONFIGURATION
+// =============================================
+// Replace with your Firebase project config
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// User ID -> Email mapping (Firebase Auth requires email format)
+function userIdToEmail(userId) {
+    return userId.toLowerCase() + '@subhiksha.app';
+}
+
+// =============================================
+// AUTH STATE & RBAC
+// =============================================
+
+let currentUser = null;       // Firebase auth user
+let currentUserData = null;   // Firestore document { role, displayName, states }
+let authInitialized = false;
+
+// Seed users: these are auto-created in Firestore on first login
+const SEED_USERS = {
+    admin:       { displayName: 'Admin',              role: 'admin',    states: [] },
+    nps:         { displayName: 'National Program',    role: 'national', states: [] },
+    pbsbk:       { displayName: 'Punjab SBK',          role: 'state',   states: ['Punjab'] },
+    hrsbk:       { displayName: 'Haryana SBK',         role: 'state',   states: ['Haryana'] },
+    tnsbk:       { displayName: 'Tamil Nadu SBK',      role: 'state',   states: ['Tamil Nadu'] },
+    tgsbk:       { displayName: 'Telangana SBK',       role: 'state',   states: ['Telangana'] },
+    kasbk:       { displayName: 'Karnataka SBK',       role: 'state',   states: ['Karnataka'] },
+    // Note: klsbk covers both Andhra Pradesh and Kerala (same user ID specified for both states)
+    klsbk:       { displayName: 'AP & Kerala SBK',     role: 'state',   states: ['Andhra Pradesh', 'Kerala'] },
+};
+
+async function ensureFirestoreUser(userId, userData) {
+    const docRef = db.collection('users').doc(userId);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+        await docRef.set(userData);
+    }
+}
+
+async function ensureSeedUsers() {
+    const batch = db.batch();
+    for (const [userId, data] of Object.entries(SEED_USERS)) {
+        const ref = db.collection('users').doc(userId);
+        const snap = await ref.get();
+        if (!snap.exists) {
+            batch.set(ref, data);
+        } else if (userId === 'klsbk') {
+            // Ensure klsbk has both Andhra Pradesh and Kerala
+            const existing = snap.data();
+            const allStates = [...new Set([...(existing.states || []), 'Andhra Pradesh', 'Kerala'])];
+            batch.update(ref, { states: allStates, displayName: 'AP & Kerala SBK' });
+        }
+    }
+    await batch.commit();
+}
+
+async function fetchUserData(userId) {
+    const doc = await db.collection('users').doc(userId).get();
+    return doc.exists ? doc.data() : null;
+}
+
+// =============================================
+// LOGIN / LOGOUT
+// =============================================
+
+async function loginWithUserId(userId, password) {
+    const email = userIdToEmail(userId);
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+    } catch (err) {
+        if (err.code === 'auth/user-not-found') {
+            // Auto-create Firebase auth user for seed users
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                // Ensure Firestore document exists
+                const seedData = SEED_USERS[userId] || null;
+                if (seedData) {
+                    await ensureFirestoreUser(userId, seedData);
+                } else {
+                    await ensureFirestoreUser(userId, { displayName: userId, role: 'state', states: [] });
+                }
+                // Now sign in again
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (createErr) {
+                throw new Error('Unable to create user: ' + createErr.message);
+            }
+        } else {
+            throw new Error('Invalid User ID or Password');
+        }
+    }
+}
+
+async function logoutUser() {
+    await auth.signOut();
+}
+
+// =============================================
+// AUTH STATE OBSERVER
+// =============================================
+
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        const userId = user.email.split('@')[0];
+        let data = await fetchUserData(userId);
+        if (!data) {
+            // Fallback: use seed data
+            const seed = SEED_USERS[userId] || null;
+            if (seed) {
+                data = seed;
+                await ensureFirestoreUser(userId, seed);
+            } else {
+                data = { displayName: userId, role: 'state', states: [] };
+                await ensureFirestoreUser(userId, data);
+            }
+        }
+        // Handle klsbk: combine Andhra Pradesh + Kerala
+        if (userId === 'klsbk') {
+            data.states = [...new Set([...(data.states || []), 'Andhra Pradesh', 'Kerala'])];
+            await db.collection('users').doc(userId).update({ states: data.states });
+        }
+        currentUserData = data;
+        showDashboard();
+        applyRBAC();
+        // Ensure seed users exist in Firestore
+        ensureSeedUsers().catch(console.warn);
+        // Load data if not already loaded
+        if (!appState.data && !appState.raw.facility.length) {
+            await loadDashboardData();
+        }
+    } else {
+        currentUser = null;
+        currentUserData = null;
+        hideDashboard();
+    }
+    authInitialized = true;
+});
+
+// =============================================
+// RBAC APPLICATION
+// =============================================
+
+function applyRBAC() {
+    if (!currentUserData) return;
+
+    const role = currentUserData.role;
+    const assignedStates = currentUserData.states || [];
+    const userBadge = document.getElementById('userBadge');
+    const roleBadge = document.getElementById('userRoleBadge');
+    const displayName = document.getElementById('userDisplayName');
+    const uploadSection = document.getElementById('uploadSection');
+    const filterState = document.getElementById('filterState');
+    const userMgmtSection = document.getElementById('userManagementSection');
+    const exportBtn = document.getElementById('exportCsvBtn');
+
+    // Update user badge
+    userBadge.style.display = 'flex';
+    roleBadge.textContent = role;
+    roleBadge.className = 'user-role-badge role-' + role;
+    displayName.textContent = currentUserData.displayName;
+
+    // Role-based visibility
+    switch (role) {
+        case 'admin':
+            // Full access: show upload, user management
+            if (uploadSection) uploadSection.style.display = 'block';
+            if (userMgmtSection) userMgmtSection.style.display = 'block';
+            if (filterState) filterState.disabled = false;
+            if (exportBtn) exportBtn.style.display = 'inline-block';
+            loadUserManagement();
+            break;
+
+        case 'national':
+            // View/export all states
+            if (uploadSection) uploadSection.style.display = 'block';
+            if (userMgmtSection) userMgmtSection.style.display = 'none';
+            if (filterState) filterState.disabled = false;
+            if (exportBtn) exportBtn.style.display = 'inline-block';
+            break;
+
+        case 'state':
+            // View/export only assigned state(s)
+            if (uploadSection) uploadSection.style.display = 'none';
+            if (userMgmtSection) userMgmtSection.style.display = 'none';
+            if (exportBtn) exportBtn.style.display = 'inline-block';
+
+            if (filterState) {
+                if (assignedStates.length === 1) {
+                    // Single state: lock filter
+                    filterState.innerHTML = '';
+                    const opt = document.createElement('option');
+                    opt.value = assignedStates[0];
+                    opt.textContent = assignedStates[0];
+                    filterState.appendChild(opt);
+                    filterState.disabled = true;
+                    appState.filters.state = assignedStates[0];
+                } else if (assignedStates.length > 1) {
+                    // Multiple states: restrict options to assigned
+                    filterState.disabled = false;
+                    filterState.innerHTML = '<option value="All">All States</option>';
+                    assignedStates.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s;
+                        opt.textContent = s;
+                        filterState.appendChild(opt);
+                    });
+                } else {
+                    filterState.disabled = true;
+                    filterState.innerHTML = '<option value="">No states assigned</option>';
+                    appState.filters.state = '';
+                }
+            }
+            break;
+    }
+
+    // Hide menu items based on role
+    const menuUpload = document.getElementById('menuUploadLink');
+    if (menuUpload && role === 'state') {
+        menuUpload.style.display = 'none';
+    } else if (menuUpload) {
+        menuUpload.style.display = '';
+    }
+}
+
+// =============================================
+// SHOW / HIDE DASHBOARD
+// =============================================
+
+function showDashboard() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.querySelector('.sidebar').style.display = '';
+    document.querySelector('.main-content').style.display = '';
+    document.getElementById('userBadge').style.display = 'flex';
+}
+
+function hideDashboard() {
+    document.getElementById('loginOverlay').style.display = 'flex';
+    document.querySelector('.sidebar').style.display = 'none';
+    document.querySelector('.main-content').style.display = 'none';
+    document.getElementById('userBadge').style.display = 'none';
+}
+
+// Initialize the dashboard hidden until login
+(function initAuth() {
+    document.querySelector('.sidebar').style.display = 'none';
+    document.querySelector('.main-content').style.display = 'none';
+    document.getElementById('userBadge').style.display = 'none';
+})();
+
+// =============================================
+// USER MANAGEMENT (Admin only)
+// =============================================
+
+async function loadUserManagement() {
+    const tbody = document.getElementById('userMgmtBody');
+    if (!tbody) return;
+    try {
+        const snapshot = await db.collection('users').orderBy('role').get();
+        tbody.innerHTML = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><code>${doc.id}</code></td>
+                <td>${data.displayName || '-'}</td>
+                <td><span class="badge badge-${data.role === 'admin' ? 'danger' : data.role === 'national' ? 'primary' : 'warning'}">${data.role}</span></td>
+                <td>${(data.states || []).join(', ') || '-'}</td>
+                <td>
+                    <button class="btn-danger" onclick="deleteUser('${doc.id}')" style="padding:4px 10px; font-size:11px;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('Failed to load users:', err);
+    }
+}
+
+async function deleteUser(userId) {
+    if (!confirm('Delete user "' + userId + '"? This cannot be undone.')) return;
+    try {
+        // Delete from Firestore
+        await db.collection('users').doc(userId).delete();
+        // Try to delete from Firebase Auth (may fail if no Admin SDK)
+        const user = auth.currentUser;
+        if (user && user.email === userIdToEmail(userId)) {
+            // Can't delete other users from client SDK; show message
+        }
+        loadUserManagement();
+    } catch (err) {
+        alert('Failed to delete user: ' + err.message);
+    }
+}
+
+// =============================================
+// LOGIN EVENT HANDLERS
+// =============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    const loginBtn = document.getElementById('loginBtn');
+    const loginUserId = document.getElementById('loginUserId');
+    const loginPassword = document.getElementById('loginPassword');
+    const loginError = document.getElementById('loginError');
+    const loginSpinner = document.getElementById('loginSpinner');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // Enter key support
+    loginPassword.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loginBtn.click();
+    });
+    loginUserId.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loginBtn.click();
+    });
+
+    loginBtn.addEventListener('click', async () => {
+        const userId = loginUserId.value.trim();
+        const password = loginPassword.value;
+        if (!userId || !password) {
+            loginError.textContent = 'Please enter User ID and Password';
+            loginError.style.display = 'block';
+            return;
+        }
+        loginError.style.display = 'none';
+        loginBtn.style.display = 'none';
+        loginSpinner.style.display = 'block';
+
+        try {
+            await loginWithUserId(userId, password);
+        } catch (err) {
+            loginError.textContent = err.message;
+            loginError.style.display = 'block';
+            loginBtn.style.display = 'block';
+            loginSpinner.style.display = 'none';
+        }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+        await logoutUser();
+    });
+
+    // User management modal
+    const modal = document.getElementById('userModal');
+    const addBtn = document.getElementById('addUserBtn');
+    const closeBtn = document.getElementById('userModalClose');
+    const cancelBtn = document.getElementById('userModalCancel');
+    const saveBtn = document.getElementById('userModalSave');
+    const roleSelect = document.getElementById('modalRole');
+    const statesField = document.getElementById('modalStatesField');
+
+    roleSelect.addEventListener('change', () => {
+        statesField.style.display = roleSelect.value === 'state' ? 'block' : 'none';
+    });
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            document.getElementById('userModalTitle').textContent = 'Add User';
+            document.getElementById('modalUserId').value = '';
+            document.getElementById('modalDisplayName').value = '';
+            document.getElementById('modalPassword').value = '';
+            document.getElementById('modalRole').value = 'state';
+            document.getElementById('modalStates').value = '';
+            statesField.style.display = 'block';
+            modal.style.display = 'flex';
+        });
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const userId = document.getElementById('modalUserId').value.trim();
+            const displayName = document.getElementById('modalDisplayName').value.trim();
+            const password = document.getElementById('modalPassword').value;
+            const role = document.getElementById('modalRole').value;
+            const statesStr = document.getElementById('modalStates').value.trim();
+
+            if (!userId || !displayName) {
+                alert('User ID and Display Name are required');
+                return;
+            }
+
+            const userData = {
+                displayName,
+                role,
+                states: role === 'state' ? statesStr.split(',').map(s => s.trim()).filter(Boolean) : []
+            };
+
+            try {
+                // Save to Firestore
+                await db.collection('users').doc(userId).set(userData);
+                // Try to create Firebase Auth user if password provided
+                if (password) {
+                    try {
+                        await firebase.auth().createUserWithEmailAndPassword(userIdToEmail(userId), password);
+                    } catch (authErr) {
+                        if (authErr.code !== 'auth/email-already-in-use') {
+                            alert('User saved to Firestore but Auth error: ' + authErr.message);
+                        }
+                    }
+                }
+                modal.style.display = 'none';
+                loadUserManagement();
+            } catch (err) {
+                alert('Failed to save user: ' + err.message);
+            }
+        });
+    }
+});
+
 let appState = {
         raw: { facility: [], progress: [], hiv: [], tb: [] },
     staged: { facility: null, progress: null, hiv: null, tb: null },
@@ -556,19 +979,16 @@ function processDashboardData() {
     });
 
     const reportedHIVPosByCode = {};
-    raw.hiv.forEach(h => {
-        if (!facCodes.has(h.PrisonOCSCode)) return;
-        if (filterStart && h.HIVConfDate && h.HIVConfDate < filterStart) return;
-        if (filterEnd && h.HIVConfDate && h.HIVConfDate > filterEnd) return;
-        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
-    });
-
     const reportedOnARTByCode = {};
     raw.hiv.forEach(h => {
         if (!facCodes.has(h.PrisonOCSCode)) return;
-        if (filterStart && h.HIVConfDate && h.HIVConfDate < filterStart) return;
-        if (filterEnd && h.HIVConfDate && h.HIVConfDate > filterEnd) return;
-        reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+        const hivDate = h.HIVConfDate ? new Date(h.HIVConfDate) : null;
+        if (filterStart && (!hivDate || hivDate < filterStart)) return;
+        if (filterEnd && hivDate && hivDate > filterEnd) return;
+        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
+        if (h.HIVPositive > 0) {
+            reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+        }
     });
 
     const reportedTBDiagByCode = {};
@@ -644,12 +1064,11 @@ function processDashboardData() {
         HCVValues: sortedKeys.map(k => trendHCV[k])
     };
 
-    const prisonTypes = ["Central Jail", "District Jail", "Sub Jail", "Special Jail", "Open Jail", "Women Jail", "Borstal Jail", "Other Jail", "Juvenile Home", "Observation Home", "Special Home", "Place of Safety", "Others"];
+    const prisonTypes = [...new Set(facilities.map(f => f.Type).filter(Boolean))].sort();
 
     const module2Rows = [];
     prisonTypes.forEach(type => {
         const facsOfType = facilities.filter(f => f.Type === type);
-        if (facsOfType.length === 0 && !type.includes('Jail')) return;
 
         let noOfPrison = facsOfType.length;
         let monthlyTarget = 0;
@@ -857,19 +1276,16 @@ function buildFacilityRowsForDateRange(startDate, endDate) {
     });
 
     const reportedHIVPosByCode = {};
-    raw.hiv.forEach(h => {
-        if (!facCodes.has(h.PrisonOCSCode)) return;
-        if (startDate && h.HIVConfDate && h.HIVConfDate < startDate) return;
-        if (endDate && h.HIVConfDate && h.HIVConfDate > endDate) return;
-        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
-    });
-
     const reportedOnARTByCode = {};
     raw.hiv.forEach(h => {
         if (!facCodes.has(h.PrisonOCSCode)) return;
-        if (startDate && h.HIVConfDate && h.HIVConfDate < startDate) return;
-        if (endDate && h.HIVConfDate && h.HIVConfDate > endDate) return;
-        reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+        const hivDate = h.HIVConfDate ? new Date(h.HIVConfDate) : null;
+        if (startDate && (!hivDate || hivDate < startDate)) return;
+        if (endDate && hivDate && hivDate > endDate) return;
+        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
+        if (h.HIVPositive > 0) {
+            reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+        }
     });
 
     const reportedTBDiagByCode = {};
@@ -1384,7 +1800,13 @@ function restoreSavedFiles() {
 
 // --- Init ---
 
-(async function init() {
+async function waitForAuth() {
+    while (!authInitialized) {
+        await new Promise(r => setTimeout(r, 100));
+    }
+}
+
+async function loadDashboardData() {
     if (restoreSavedFiles()) return;
     try {
         await loadFromJSON(JSON_FILES, 'Loaded from local files');
@@ -1392,4 +1814,10 @@ function restoreSavedFiles() {
         console.info('Local JSON not available, trying GitHub...');
         await loadAllFromGitHub();
     }
+}
+
+(async function init() {
+    await waitForAuth();
+    if (!currentUser) return; // Not logged in, login overlay handles it
+    await loadDashboardData();
 })();
