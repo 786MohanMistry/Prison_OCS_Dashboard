@@ -184,20 +184,19 @@
         <!-- SECTION 2: JAILS REPORTED SUMMARY TABLE -->
         <section class="dashboard-section" id="reportedSection">
             <div class="glass-card" style="overflow: hidden;">
-                <div class="card-title">
-                    Type of P&OCS wise reporting summary
-                </div>
-                
-                <div class="filter-panel">
-                    <div class="filter-group">
-                        <label for="filterReportedStartDate">Start Date</label>
-                        <input type="date" class="filter-control" id="filterReportedStartDate">
+                <div class="card-title" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span style="white-space:nowrap;">Type of P&OCS wise reporting summary</span>
+                    <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <label for="filterReportedStartDate" style="font-size:10px; font-weight:600; text-transform:uppercase; white-space:nowrap;">Start</label>
+                            <input type="date" class="filter-control" id="filterReportedStartDate" style="width:130px; padding:4px 6px; font-size:11px;">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <label for="filterReportedEndDate" style="font-size:10px; font-weight:600; text-transform:uppercase; white-space:nowrap;">End</label>
+                            <input type="date" class="filter-control" id="filterReportedEndDate" style="width:130px; padding:4px 6px; font-size:11px;">
+                        </div>
+                        <button class="btn btn-primary" id="applyReportedDateBtn" style="padding:4px 10px; font-size:11px;">Apply</button>
                     </div>
-                    <div class="filter-group">
-                        <label for="filterReportedEndDate">End Date</label>
-                        <input type="date" class="filter-control" id="filterReportedEndDate">
-                    </div>
-                    <button class="btn btn-primary" id="applyReportedDateBtn">Apply</button>
                 </div>
                 
                 <div class="table-container" style="max-height: 650px;">
