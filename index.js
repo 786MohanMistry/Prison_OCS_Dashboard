@@ -12,6 +12,7 @@ let appState = {
         groupBy: 'Month'
     },
     progressDateFilter: { startDate: '', endDate: '' },
+    reportedDateFilter: { startDate: '', endDate: '' },
     facilityTable: {
         currentPage: 1,
         pageSize: 15,
@@ -792,6 +793,153 @@ function processDashboardData() {
     return { states: [...new Set(allFac.map(f => f.State).filter(Boolean))].sort(), pus: allPU, types: allTypes };
 }
 
+function buildReportedSummaryForDateRange(startDate, endDate) {
+    const f = appState.filters;
+    const raw = appState.raw;
+
+    const facilities = raw.facility.filter(fac => {
+        if (f.state !== 'All' && fac.State !== f.state) return false;
+        if (f.facilityType !== 'All' && fac.FacilityType !== f.facilityType) return false;
+        if (f.prisonType !== 'All' && fac.Type !== f.prisonType) return false;
+        return true;
+    });
+
+    const facCodes = new Set(facilities.map(fac => fac.PrisonOCSCode));
+
+    const filteredProgress = raw.progress.filter(p => {
+        if (!facCodes.has(p.PrisonOCSCode)) return false;
+        if (f.pu !== 'All' && p.PU !== f.pu) return false;
+        if (startDate && p.EndDate && p.EndDate < startDate) return false;
+        if (endDate && p.EndDate && p.EndDate > endDate) return false;
+        return true;
+    });
+
+    const reportedProgress = filteredProgress.filter(p => {
+        const s = (p.ReportedStatus || '').toLowerCase();
+        return s === 'yes' || s === 'no';
+    });
+
+    const reportsCountByCode = {};
+    const reportedHIVByCode = {};
+    const reportedTBScreenedByCode = {};
+    const reportedTBPresByCode = {};
+    const reportedTBTestedByCode = {};
+    const reportedCampsByCode = {};
+
+    reportedProgress.forEach(p => {
+        const code = p.PrisonOCSCode;
+        reportsCountByCode[code] = (reportsCountByCode[code] || 0) + 1;
+        reportedHIVByCode[code] = (reportedHIVByCode[code] || 0) + p.TestedHIV;
+        reportedTBScreenedByCode[code] = (reportedTBScreenedByCode[code] || 0) + p.ScreenedTB;
+        reportedTBPresByCode[code] = (reportedTBPresByCode[code] || 0) + p.TBPresumptive;
+        reportedTBTestedByCode[code] = (reportedTBTestedByCode[code] || 0) + p.TestedTB;
+        reportedCampsByCode[code] = (reportedCampsByCode[code] || 0) + (p.CampsOrganized || 0);
+    });
+
+    const monthCount = countUniqueMonths(filteredProgress);
+
+    const reportedHIVPosByCode = {};
+    const reportedOnARTByCode = {};
+    raw.hiv.forEach(h => {
+        if (!facCodes.has(h.PrisonOCSCode)) return;
+        if (startDate && h.HIVConfDate && h.HIVConfDate < startDate) return;
+        if (endDate && h.HIVConfDate && h.HIVConfDate > endDate) return;
+        reportedHIVPosByCode[h.PrisonOCSCode] = (reportedHIVPosByCode[h.PrisonOCSCode] || 0) + h.HIVPositive;
+        if (h.HIVPositive > 0) {
+            reportedOnARTByCode[h.PrisonOCSCode] = (reportedOnARTByCode[h.PrisonOCSCode] || 0) + h.OnART;
+        }
+    });
+
+    const reportedTBDiagByCode = {};
+    const reportedOnATTByCode = {};
+    raw.tb.forEach(t => {
+        if (!facCodes.has(t.PrisonOCSCode)) return;
+        if (startDate && t.TBTestDate && t.TBTestDate < startDate) return;
+        if (endDate && t.TBTestDate && t.TBTestDate > endDate) return;
+        reportedTBDiagByCode[t.PrisonOCSCode] = (reportedTBDiagByCode[t.PrisonOCSCode] || 0) + t.DiagnosedTB;
+        if (startDate && t.ATTInitDate && t.ATTInitDate < startDate) return;
+        if (endDate && t.ATTInitDate && t.ATTInitDate > endDate) return;
+        reportedOnATTByCode[t.PrisonOCSCode] = (reportedOnATTByCode[t.PrisonOCSCode] || 0) + t.OnATT;
+    });
+
+    const prisonTypes = [...new Set(facilities.map(f => f.Type).filter(Boolean))].sort();
+    const rows = [];
+
+    prisonTypes.forEach(type => {
+        const facsOfType = facilities.filter(f => f.Type === type);
+
+        let noOfPrison = facsOfType.length;
+        let monthlyTarget = 0;
+        let totalTestedHIV = 0, totalScreenedTB = 0, tbPresumptive = 0, tbTested = 0;
+        let reported1 = 0, reported2 = 0, reported3 = 0, reported4 = 0, reported5 = 0, reported0Data = 0;
+        const reportedCodes = {};
+
+        facsOfType.forEach(fac => {
+            monthlyTarget += fac.Target;
+            const code = fac.PrisonOCSCode;
+            if (reportsCountByCode[code]) {
+                reportedCodes[code] = true;
+                const count = reportsCountByCode[code];
+                if (count === 1) reported1++;
+                else if (count === 2) reported2++;
+                else if (count === 3) reported3++;
+                else if (count === 4) reported4++;
+                else if (count >= 5) reported5++;
+                const hivTested = reportedHIVByCode[code] || 0;
+                totalTestedHIV += hivTested;
+                if (hivTested === 0) reported0Data++;
+                totalScreenedTB += reportedTBScreenedByCode[code] || 0;
+                tbPresumptive += reportedTBPresByCode[code] || 0;
+                tbTested += reportedTBTestedByCode[code] || 0;
+            }
+        });
+
+        const noOfPrisonReported = Object.keys(reportedCodes).length;
+        const noOfPrisonNotReported = noOfPrison - noOfPrisonReported;
+
+        let hivPositive = 0, onArt = 0;
+        Object.keys(reportedCodes).forEach(code => {
+            hivPositive += reportedHIVPosByCode[code] || 0;
+            onArt += reportedOnARTByCode[code] || 0;
+        });
+
+        let diagTB = 0, onAtt = 0;
+        Object.keys(reportedCodes).forEach(code => {
+            diagTB += reportedTBDiagByCode[code] || 0;
+            onAtt += reportedOnATTByCode[code] || 0;
+        });
+
+        const adjustedTarget = monthlyTarget * monthCount;
+        rows.push({
+            Type: type,
+            NoOfPrison: noOfPrison,
+            NoOfPrisonReported: noOfPrisonReported,
+            NoOfPrisonNotReported: noOfPrisonNotReported,
+            NoOfPrisonReported0: reported0Data,
+            Reported1: reported1, Reported2: reported2, Reported3: reported3,
+            Reported4: reported4, Reported5: reported5,
+            MonthlyTarget: adjustedTarget,
+            TestedHIV: totalTestedHIV,
+            PctAchieved: adjustedTarget > 0 ? (totalTestedHIV / adjustedTarget) * 100 : 0,
+            HIVPositive: hivPositive,
+            OnART: onArt,
+            PctOnART: hivPositive > 0 ? (onArt / hivPositive) * 100 : 0,
+            ScreenedTB: totalScreenedTB,
+            PctTBScreened: adjustedTarget > 0 ? (totalScreenedTB / adjustedTarget) * 100 : 0,
+            TBPresumptive: tbPresumptive,
+            PctPresumptive: totalScreenedTB > 0 ? (tbPresumptive / totalScreenedTB) * 100 : 0,
+            TestedTB: tbTested,
+            PctTested: tbPresumptive > 0 ? (tbTested / tbPresumptive) * 100 : 0,
+            DiagnosedTB: diagTB,
+            PctTBPositivity: tbTested > 0 ? (diagTB / tbTested) * 100 : 0,
+            OnATT: onAtt,
+            PctOnATT: diagTB > 0 ? (onAtt / diagTB) * 100 : 0
+        });
+    });
+
+    return rows;
+}
+
 function buildFacilityRowsForDateRange(startDate, endDate) {
     const f = appState.filters;
     const raw = appState.raw;
@@ -1091,8 +1239,19 @@ function updateReportedSummaryTab() {
     const body = document.getElementById('reportedSummaryBody');
     body.innerHTML = '';
 
+    const rdf = appState.reportedDateFilter;
+    const hasDateFilter = rdf.startDate || rdf.endDate;
+    let startDate = rdf.startDate ? new Date(rdf.startDate) : null;
+    let endDate = rdf.endDate ? new Date(rdf.endDate) : null;
+    let module2Data;
+    if (hasDateFilter) {
+        module2Data = buildReportedSummaryForDateRange(startDate, endDate);
+    } else {
+        module2Data = data.Module2;
+    }
+
     let tots = { prison:0, reported:0, not:0, d0:0, r1:0, r2:0, r3:0, r4:0, r5:0, target:0, hiv:0, pos:0, art:0, tbs:0, tbp:0, tbt:0, tbd:0, att:0 };
-    data.Module2.forEach(row => {
+    module2Data.forEach(row => {
         tots.prison += row.NoOfPrison; tots.reported += row.NoOfPrisonReported; tots.not += row.NoOfPrisonNotReported; tots.d0 += row.NoOfPrisonReported0;
         tots.r1 += row.Reported1; tots.r2 += row.Reported2; tots.r3 += row.Reported3; tots.r4 += row.Reported4; tots.r5 += row.Reported5;
         tots.target += row.MonthlyTarget; tots.hiv += row.TestedHIV; tots.pos += row.HIVPositive; tots.art += row.OnART;
@@ -1106,7 +1265,7 @@ function updateReportedSummaryTab() {
         <td>${formatNum(tots.tbs)}</td><td>${formatNum(tots.target>0?tots.tbs/tots.target*100:0, true)}</td><td>${formatNum(tots.tbp)}</td><td>${formatNum(tots.tbs>0?tots.tbp/tots.tbs*100:0, true)}</td><td>${formatNum(tots.tbt)}</td><td>${formatNum(tots.tbp>0?tots.tbt/tots.tbp*100:0, true)}</td><td>${formatNum(tots.tbd)}</td><td>${formatNum(tots.tbt>0?tots.tbd/tots.tbt*100:0, true)}</td><td>${formatNum(tots.att)}</td><td>${formatNum(tots.tbd>0?tots.att/tots.tbd*100:0, true)}</td>`;
     body.appendChild(totalsTr);
 
-    data.Module2.forEach(row => {
+    module2Data.forEach(row => {
         if (row.NoOfPrison === 0 && row.TestedHIV === 0 && row.ScreenedTB === 0) return;
         const tr = document.createElement('tr');
         tr.innerHTML = `<td style="position:sticky; left:0; z-index:9; background:var(--bg-card); font-weight:600;">${row.Type}</td>
@@ -1248,6 +1407,12 @@ document.getElementById('applyProgressDateBtn').addEventListener('click', () => 
     appState.progressDateFilter.endDate = document.getElementById('filterProgressEndDate').value;
     appState.facilityTable.currentPage = 1;
     updateFacilityProgressTab();
+});
+
+document.getElementById('applyReportedDateBtn').addEventListener('click', () => {
+    appState.reportedDateFilter.startDate = document.getElementById('filterReportedStartDate').value;
+    appState.reportedDateFilter.endDate = document.getElementById('filterReportedEndDate').value;
+    updateReportedSummaryTab();
 });
 
 document.getElementById('githubLoadBtn').addEventListener('click', loadAllFromGitHub);
