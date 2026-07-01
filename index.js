@@ -520,7 +520,7 @@ function processDashboardData() {
     if (!filterStart || filterStart < MIN_START) filterStart = MIN_START;
 
     const monthCount = countUniqueMonths(filteredProgress);
-    const overallMonthCount = countUniqueMonths(raw.progress);
+    const overallMonthCount = countUniqueMonths(filteredProgress);
     const totalRawTarget = facilities.reduce((sum, f) => sum + f.Target, 0);
 
     const reportsCountByCode = {};
